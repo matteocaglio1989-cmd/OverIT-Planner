@@ -31,7 +31,7 @@ import {
 } from "@/lib/actions/projects"
 import type { ProjectRole, Profile } from "@/lib/types/database"
 
-interface RoleWithProfile extends ProjectRole {
+type RoleWithProfile = Omit<ProjectRole, "assigned_profile"> & {
   assigned_profile?: Pick<Profile, "id" | "full_name"> | null
 }
 
