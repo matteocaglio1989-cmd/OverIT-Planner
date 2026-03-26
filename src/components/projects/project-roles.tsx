@@ -29,7 +29,7 @@ import {
   updateProjectRole,
   deleteProjectRole,
 } from "@/lib/actions/projects"
-import type { ProjectRole, Profile } from "@/lib/types/database"
+import type { ProjectRole, Profile, RoleDefinition } from "@/lib/types/database"
 
 type RoleWithProfile = Omit<ProjectRole, "assigned_profile"> & {
   assigned_profile?: Pick<Profile, "id" | "full_name"> | null
@@ -40,6 +40,7 @@ interface ProjectRolesProps {
   roles: RoleWithProfile[]
   profiles: Pick<Profile, "id" | "full_name">[]
   currency: string
+  roleDefinitions?: RoleDefinition[]
 }
 
 export function ProjectRoles({
@@ -47,6 +48,7 @@ export function ProjectRoles({
   roles,
   profiles,
   currency,
+  roleDefinitions = [],
 }: ProjectRolesProps) {
   const router = useRouter()
   const [addOpen, setAddOpen] = React.useState(false)
@@ -68,6 +70,7 @@ export function ProjectRoles({
             <RoleFormContent
               projectId={projectId}
               profiles={profiles}
+              roleDefinitions={roleDefinitions}
               loading={loading}
               setLoading={setLoading}
               onDone={() => {
@@ -82,7 +85,7 @@ export function ProjectRoles({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Title</TableHead>
+            <TableHead>Role</TableHead>
             <TableHead>Bill Rate</TableHead>
             <TableHead>Est. Hours</TableHead>
             <TableHead>Status</TableHead>
@@ -156,6 +159,7 @@ export function ProjectRoles({
                           projectId={projectId}
                           role={role}
                           profiles={profiles}
+                          roleDefinitions={roleDefinitions}
                           loading={loading}
                           setLoading={setLoading}
                           onDone={() => {
@@ -194,6 +198,7 @@ function RoleFormContent({
   projectId,
   role,
   profiles,
+  roleDefinitions,
   loading,
   setLoading,
   onDone,
@@ -201,6 +206,7 @@ function RoleFormContent({
   projectId: string
   role?: RoleWithProfile
   profiles: Pick<Profile, "id" | "full_name">[]
+  roleDefinitions: RoleDefinition[]
   loading: boolean
   setLoading: (v: boolean) => void
   onDone: () => void
@@ -219,6 +225,15 @@ function RoleFormContent({
   const [skillsInput, setSkillsInput] = React.useState(
     (role?.required_skills ?? []).join(", ")
   )
+
+  function handleRoleSelect(value: string) {
+    setTitle(value)
+    // Auto-fill bill rate from role definition
+    const roleDef = roleDefinitions.find((rd) => rd.name === value)
+    if (roleDef?.default_bill_rate != null) {
+      setBillRate(String(roleDef.default_bill_rate))
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -254,8 +269,31 @@ function RoleFormContent({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-1.5">
-        <label className="text-sm font-medium">Title *</label>
-        <Input required value={title} onChange={(e) => setTitle(e.target.value)} />
+        <label className="text-sm font-medium">Role *</label>
+        {roleDefinitions.length > 0 ? (
+          <Select
+            required
+            value={title}
+            onChange={(e) => handleRoleSelect(e.target.value)}
+          >
+            <SelectOption value="">Select a role...</SelectOption>
+            {roleDefinitions.map((rd) => (
+              <SelectOption key={rd.id} value={rd.name}>
+                {rd.name}
+                {rd.default_bill_rate != null
+                  ? ` (${Number(rd.default_bill_rate).toFixed(0)}/h)`
+                  : ""}
+              </SelectOption>
+            ))}
+          </Select>
+        ) : (
+          <Input
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Role name (define roles in Settings > Roles)"
+          />
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">

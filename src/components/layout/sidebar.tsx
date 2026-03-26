@@ -13,6 +13,8 @@ import {
   BarChart3,
   Building2,
   Settings,
+  Briefcase,
+  Plug,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -29,6 +31,8 @@ const navigation = [
   { name: "People", href: "/people", icon: Users },
   { name: "Clients", href: "/clients", icon: Building2 },
   { name: "Reports", href: "/reports", icon: BarChart3 },
+  { name: "Integrations", href: "/integrations", icon: Plug },
+  { name: "Roles", href: "/settings/roles", icon: Briefcase },
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 

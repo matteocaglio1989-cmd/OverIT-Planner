@@ -196,11 +196,22 @@ export function TimelineGrid({
         {/* Open Roles Section */}
         {openRoles.length > 0 && (
           <>
-            {/* Section header row */}
+            {/* Section header row - must have content to not collapse */}
             <div
-              className="border-b bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
+              className="border-b bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 flex"
               style={{ height: ROW_HEIGHT, width: totalWidth }}
-            />
+            >
+              {columns.map((col) => {
+                const dateStr = format(col, zoom === "month" ? "yyyy-MM" : "yyyy-MM-dd")
+                return (
+                  <div
+                    key={dateStr}
+                    className="border-r h-full"
+                    style={{ width: colWidth, minWidth: colWidth }}
+                  />
+                )
+              })}
+            </div>
             {/* Open role rows with project date range blocks */}
             {openRoles.map((role) => {
               const projStart = role.project?.start_date

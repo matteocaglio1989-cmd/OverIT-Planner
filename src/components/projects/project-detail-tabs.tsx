@@ -13,6 +13,7 @@ import type {
   Profile,
   TimeEntry,
   Allocation,
+  RoleDefinition,
 } from "@/lib/types/database"
 
 interface ProjectWithDetails extends Project {
@@ -28,12 +29,14 @@ interface ProjectDetailTabsProps {
   project: ProjectWithDetails
   clients: Pick<Client, "id" | "name">[]
   profiles: Pick<Profile, "id" | "full_name">[]
+  roleDefinitions?: RoleDefinition[]
 }
 
 export function ProjectDetailTabs({
   project,
   clients,
   profiles,
+  roleDefinitions = [],
 }: ProjectDetailTabsProps) {
   const actualHours = project.time_entries.reduce((sum, te) => sum + te.hours, 0)
 
@@ -74,6 +77,7 @@ export function ProjectDetailTabs({
             roles={project.roles}
             profiles={profiles}
             currency={project.currency}
+            roleDefinitions={roleDefinitions}
           />
         </div>
       </TabsContent>
