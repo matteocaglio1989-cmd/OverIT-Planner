@@ -270,20 +270,53 @@ export async function createProjectRole(
 ) {
   const supabase = await createClient()
 
-  const { error } = await supabase.from("project_roles").insert({
-    project_id: projectId,
-    title: data.title,
-    phase_id: data.phase_id || null,
-    required_skills: data.required_skills ?? [],
-    bill_rate: data.bill_rate ?? null,
-    estimated_hours: data.estimated_hours ?? null,
-    is_filled: data.is_filled ?? false,
-    assigned_profile_id: data.assigned_profile_id || null,
-  })
+  const { data: role, error } = await supabase
+    .from("project_roles")
+    .insert({
+      project_id: projectId,
+      title: data.title,
+      phase_id: data.phase_id || null,
+      required_skills: data.required_skills ?? [],
+      bill_rate: data.bill_rate ?? null,
+      estimated_hours: data.estimated_hours ?? null,
+      is_filled: data.assigned_profile_id ? true : (data.is_filled ?? false),
+      assigned_profile_id: data.assigned_profile_id || null,
+    })
+    .select()
+    .single()
 
   if (error) throw error
 
+  // If a profile is assigned, auto-create an allocation
+  if (data.assigned_profile_id && role) {
+    // Get project dates for the allocation
+    const { data: project } = await supabase
+      .from("projects")
+      .select("start_date, end_date, organization_id")
+      .eq("id", projectId)
+      .single()
+
+    if (project) {
+      const startDate = project.start_date || new Date().toISOString().split("T")[0]
+      const endDate = project.end_date || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]
+
+      await supabase.from("allocations").insert({
+        organization_id: project.organization_id,
+        project_id: projectId,
+        profile_id: data.assigned_profile_id,
+        project_role_id: role.id,
+        start_date: startDate,
+        end_date: endDate,
+        hours_per_day: data.estimated_hours ? Math.min(data.estimated_hours / 20, 8) : 8,
+        bill_rate: data.bill_rate ?? null,
+        status: "confirmed",
+      })
+    }
+  }
+
   revalidatePath(`/projects/${projectId}`)
+  revalidatePath("/timeline")
+  revalidatePath("/staffing")
 }
 
 export async function updateProjectRole(
@@ -303,12 +336,27 @@ export async function updateProjectRole(
 ) {
   const supabase = await createClient()
 
-  const { data: role } = await supabase
+  // Get the current role state before updating
+  const { data: currentRole } = await supabase
     .from("project_roles")
-    .select("project_id")
+    .select("*, projects(organization_id, start_date, end_date)")
     .eq("id", id)
     .single()
 
+  if (!currentRole) throw new Error("Role not found")
+
+  const project = (currentRole as Record<string, unknown>).projects as {
+    organization_id: string
+    start_date: string | null
+    end_date: string | null
+  } | null
+
+  // Auto-set is_filled based on assignment
+  if ("assigned_profile_id" in data) {
+    data.is_filled = !!data.assigned_profile_id
+  }
+
+  // Update the role
   const { error } = await supabase
     .from("project_roles")
     .update(data)
@@ -316,7 +364,70 @@ export async function updateProjectRole(
 
   if (error) throw error
 
-  if (role) revalidatePath(`/projects/${role.project_id}`)
+  const oldProfileId = currentRole.assigned_profile_id
+  const newProfileId = data.assigned_profile_id
+
+  // Handle assignment changes
+  if ("assigned_profile_id" in data && oldProfileId !== newProfileId) {
+    if (oldProfileId && !newProfileId) {
+      // Person was unassigned — delete their allocation for this role
+      await supabase
+        .from("allocations")
+        .delete()
+        .eq("project_role_id", id)
+        .eq("profile_id", oldProfileId)
+    } else if (!oldProfileId && newProfileId) {
+      // Person was newly assigned — create allocation
+      if (project) {
+        const startDate = project.start_date || new Date().toISOString().split("T")[0]
+        const endDate = project.end_date || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]
+
+        await supabase.from("allocations").insert({
+          organization_id: project.organization_id,
+          project_id: currentRole.project_id,
+          profile_id: newProfileId,
+          project_role_id: id,
+          start_date: startDate,
+          end_date: endDate,
+          hours_per_day: data.estimated_hours
+            ? Math.min(Number(data.estimated_hours) / 20, 8)
+            : currentRole.estimated_hours
+              ? Math.min(Number(currentRole.estimated_hours) / 20, 8)
+              : 8,
+          bill_rate: data.bill_rate ?? currentRole.bill_rate ?? null,
+          status: "confirmed",
+        })
+      }
+    } else if (oldProfileId && newProfileId && oldProfileId !== newProfileId) {
+      // Person changed — update the allocation's profile
+      await supabase
+        .from("allocations")
+        .update({ profile_id: newProfileId })
+        .eq("project_role_id", id)
+        .eq("profile_id", oldProfileId)
+    }
+  }
+
+  // Propagate bill_rate changes to existing allocations
+  if ("bill_rate" in data && data.bill_rate !== undefined) {
+    await supabase
+      .from("allocations")
+      .update({ bill_rate: data.bill_rate })
+      .eq("project_role_id", id)
+  }
+
+  // Propagate estimated_hours changes to allocation hours_per_day
+  if ("estimated_hours" in data && data.estimated_hours !== undefined && data.estimated_hours !== null) {
+    const newHoursPerDay = Math.min(Number(data.estimated_hours) / 20, 8)
+    await supabase
+      .from("allocations")
+      .update({ hours_per_day: newHoursPerDay })
+      .eq("project_role_id", id)
+  }
+
+  revalidatePath(`/projects/${currentRole.project_id}`)
+  revalidatePath("/timeline")
+  revalidatePath("/staffing")
 }
 
 export async function deleteProjectRole(id: string) {
@@ -328,6 +439,12 @@ export async function deleteProjectRole(id: string) {
     .eq("id", id)
     .single()
 
+  // Delete all allocations linked to this role first
+  await supabase
+    .from("allocations")
+    .delete()
+    .eq("project_role_id", id)
+
   const { error } = await supabase
     .from("project_roles")
     .delete()
@@ -335,5 +452,9 @@ export async function deleteProjectRole(id: string) {
 
   if (error) throw error
 
-  if (role) revalidatePath(`/projects/${role.project_id}`)
+  if (role) {
+    revalidatePath(`/projects/${role.project_id}`)
+    revalidatePath("/timeline")
+    revalidatePath("/staffing")
+  }
 }

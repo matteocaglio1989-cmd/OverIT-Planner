@@ -48,9 +48,21 @@ export function ProjectForm({
   const [budgetHours, setBudgetHours] = React.useState(
     project?.budget_hours != null ? String(project.budget_hours) : ""
   )
+  const [budgetHoursDisplay, setBudgetHoursDisplay] = React.useState(
+    project?.budget_hours != null
+      ? new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(project.budget_hours)
+      : ""
+  )
+  const [isBudgetHoursFocused, setIsBudgetHoursFocused] = React.useState(false)
   const [budgetAmount, setBudgetAmount] = React.useState(
     project?.budget_amount != null ? String(project.budget_amount) : ""
   )
+  const [budgetAmountDisplay, setBudgetAmountDisplay] = React.useState(
+    project?.budget_amount != null
+      ? new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(project.budget_amount)
+      : ""
+  )
+  const [isBudgetAmountFocused, setIsBudgetAmountFocused] = React.useState(false)
   const [currency, setCurrency] = React.useState(project?.currency ?? "USD")
   const [ownerId, setOwnerId] = React.useState(project?.owner_id ?? "")
   const [color, setColor] = React.useState(project?.color ?? "#6366f1")
@@ -221,11 +233,27 @@ export function ProjectForm({
           </label>
           <Input
             id="pf-bhours"
-            type="number"
+            type={isBudgetHoursFocused ? "number" : "text"}
             min="0"
             step="0.5"
-            value={budgetHours}
-            onChange={(e) => setBudgetHours(e.target.value)}
+            value={isBudgetHoursFocused ? budgetHours : budgetHoursDisplay}
+            onChange={(e) => {
+              setBudgetHours(e.target.value)
+            }}
+            onFocus={() => setIsBudgetHoursFocused(true)}
+            onBlur={() => {
+              setIsBudgetHoursFocused(false)
+              if (budgetHours) {
+                const num = parseFloat(budgetHours)
+                if (!isNaN(num)) {
+                  setBudgetHoursDisplay(
+                    new Intl.NumberFormat("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(num)
+                  )
+                }
+              } else {
+                setBudgetHoursDisplay("")
+              }
+            }}
             placeholder="0"
           />
         </div>
@@ -236,11 +264,27 @@ export function ProjectForm({
           </label>
           <Input
             id="pf-bamount"
-            type="number"
+            type={isBudgetAmountFocused ? "number" : "text"}
             min="0"
             step="0.01"
-            value={budgetAmount}
-            onChange={(e) => setBudgetAmount(e.target.value)}
+            value={isBudgetAmountFocused ? budgetAmount : budgetAmountDisplay}
+            onChange={(e) => {
+              setBudgetAmount(e.target.value)
+            }}
+            onFocus={() => setIsBudgetAmountFocused(true)}
+            onBlur={() => {
+              setIsBudgetAmountFocused(false)
+              if (budgetAmount) {
+                const num = parseFloat(budgetAmount)
+                if (!isNaN(num)) {
+                  setBudgetAmountDisplay(
+                    new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)
+                  )
+                }
+              } else {
+                setBudgetAmountDisplay("")
+              }
+            }}
             placeholder="0.00"
           />
         </div>

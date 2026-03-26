@@ -13,6 +13,7 @@ import {
   getAbsences,
   getHolidays,
 } from "@/lib/actions/allocations"
+import { getOpenRoles } from "@/lib/actions/staffing"
 import { TimelineView } from "@/components/timeline/timeline-view"
 
 export default async function TimelinePage() {
@@ -22,7 +23,7 @@ export default async function TimelinePage() {
   const startStr = format(rangeStart, "yyyy-MM-dd")
   const endStr = format(rangeEnd, "yyyy-MM-dd")
 
-  const [profiles, projects, skills, allocations, absences, holidays] =
+  const [profiles, projects, skills, allocations, absences, holidays, openRoles] =
     await Promise.all([
       getProfiles(),
       getProjects(),
@@ -30,6 +31,7 @@ export default async function TimelinePage() {
       getAllocations(startStr, endStr),
       getAbsences(startStr, endStr),
       getHolidays(startStr, endStr),
+      getOpenRoles(),
     ])
 
   return (
@@ -48,6 +50,7 @@ export default async function TimelinePage() {
         initialHolidays={holidays}
         projects={projects}
         skills={skills}
+        initialOpenRoles={openRoles}
       />
     </div>
   )
