@@ -1,8 +1,8 @@
-export default function SkillsPage() {
-  return (
-    <div>
-      <h1 className="text-3xl font-bold tracking-tight">Skills</h1>
-      <p className="text-muted-foreground mt-2">Manage skills taxonomy.</p>
-    </div>
-  )
+import { getSkills } from "@/lib/actions/skills"
+import { SkillsManager } from "@/components/people/skills-manager"
+
+export default async function SkillsPage() {
+  const skills = await getSkills()
+
+  return <SkillsManager skills={skills} />
 }
