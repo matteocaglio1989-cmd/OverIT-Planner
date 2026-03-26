@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
+import { Input } from "@/components/ui/input"
 import { Select, SelectOption } from "@/components/ui/select"
 import { useTimelineStore } from "@/stores/timeline-store"
 import type { Profile, Project, Skill } from "@/lib/types/database"
@@ -31,6 +32,14 @@ export function TimelineFilters({
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
         Filters
       </span>
+
+      {/* People search */}
+      <Input
+        placeholder="Search people..."
+        className="h-8 text-xs w-[180px]"
+        value={filters.search}
+        onChange={(e) => setFilters({ search: e.target.value })}
+      />
 
       {/* Project filter */}
       <Select

@@ -1,7 +1,5 @@
 "use client"
 
-import { Input } from "@/components/ui/input"
-import { useTimelineStore } from "@/stores/timeline-store"
 import type { Profile } from "@/lib/types/database"
 import type { OpenRoleWithProject } from "@/components/timeline/timeline-view"
 import { UserSearch } from "lucide-react"
@@ -14,19 +12,8 @@ interface TimelineSidebarProps {
 }
 
 export function TimelineSidebar({ profiles, openRoles = [] }: TimelineSidebarProps) {
-  const { filters, setFilters } = useTimelineStore()
-
   return (
     <div className="w-[240px] min-w-[240px] border-r bg-background flex flex-col">
-      {/* Search */}
-      <div className="p-2 border-b">
-        <Input
-          placeholder="Search people..."
-          className="h-8 text-xs"
-          value={filters.search}
-          onChange={(e) => setFilters({ search: e.target.value })}
-        />
-      </div>
       {/* People list */}
       <div className="flex-1 overflow-y-auto">
         {profiles.map((profile) => (
