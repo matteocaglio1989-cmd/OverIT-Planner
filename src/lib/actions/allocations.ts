@@ -80,7 +80,17 @@ export async function createAllocation(data: {
 
   if (error) throw error
 
+  // If linked to a project role, mark it as filled
+  if (data.project_role_id) {
+    await supabase
+      .from("project_roles")
+      .update({ is_filled: true, assigned_profile_id: data.profile_id })
+      .eq("id", data.project_role_id)
+  }
+
   revalidatePath("/timeline")
+  revalidatePath("/staffing")
+  revalidatePath(`/projects/${data.project_id}`)
 }
 
 export async function updateAllocation(
@@ -102,6 +112,12 @@ export async function updateAllocation(
 ) {
   const supabase = await createClient()
 
+  const { data: allocation } = await supabase
+    .from("allocations")
+    .select("project_id, project_role_id")
+    .eq("id", id)
+    .single()
+
   const { error } = await supabase
     .from("allocations")
     .update(data)
@@ -109,17 +125,49 @@ export async function updateAllocation(
 
   if (error) throw error
 
+  // Sync bill_rate back to role if changed
+  const roleId = data.project_role_id ?? allocation?.project_role_id
+  if (roleId && data.bill_rate !== undefined) {
+    await supabase
+      .from("project_roles")
+      .update({ bill_rate: data.bill_rate })
+      .eq("id", roleId)
+  }
+
   revalidatePath("/timeline")
+  revalidatePath("/staffing")
+  if (allocation?.project_id) {
+    revalidatePath(`/projects/${allocation.project_id}`)
+  }
 }
 
 export async function deleteAllocation(id: string) {
   const supabase = await createClient()
 
+  // Get the allocation before deleting to sync back to role
+  const { data: allocation } = await supabase
+    .from("allocations")
+    .select("project_role_id, project_id")
+    .eq("id", id)
+    .single()
+
   const { error } = await supabase.from("allocations").delete().eq("id", id)
 
   if (error) throw error
 
+  // If linked to a project role, mark it as unfilled
+  if (allocation?.project_role_id) {
+    await supabase
+      .from("project_roles")
+      .update({ is_filled: false, assigned_profile_id: null })
+      .eq("id", allocation.project_role_id)
+  }
+
   revalidatePath("/timeline")
+  revalidatePath("/staffing")
+  if (allocation?.project_id) {
+    revalidatePath(`/projects/${allocation.project_id}`)
+  }
 }
 
 // ---------------------------------------------------------------------------
