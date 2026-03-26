@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Select, SelectOption } from "@/components/ui/select"
 import {
   Table,
   TableHeader,
@@ -15,189 +16,246 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table"
-import { ArrowLeft, RefreshCw, Check, AlertCircle, Plug, Users } from "lucide-react"
+import {
+  ArrowLeft,
+  ArrowRight,
+  RefreshCw,
+  Check,
+  AlertCircle,
+  Plug,
+  Users,
+  AlertTriangle,
+  Plus,
+} from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 
-interface SyncStatus {
-  connected: boolean
-  lastSync: string | null
-  employeeCount: number | null
+interface PreviewEmployee {
+  hibobId: string
+  email: string
+  fullName: string
+  jobTitle: string
+  department: string
+  startDate: string
+  location: string
+  isDuplicate: boolean
+  hasChanges: boolean
+  existingProfileId: string | null
+  roleExists: boolean
+  selected: boolean
 }
+
+interface RoleDefinition {
+  id: string
+  name: string
+  default_bill_rate: number | null
+}
+
+interface RoleMapping {
+  hibobTitle: string
+  appRoleId: string | null
+  appRoleName: string
+  defaultBillRate: number | null
+  createNew: boolean
+}
+
+type Step = "config" | "preview" | "roles" | "confirm" | "result"
 
 export function HiBobIntegration() {
   const router = useRouter()
   const supabase = createClient()
 
+  // Config state
   const [apiToken, setApiToken] = useState("")
   const [serviceUserId, setServiceUserId] = useState("")
+  const [connected, setConnected] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [syncing, setSyncing] = useState(false)
+
+  // Flow state
+  const [step, setStep] = useState<Step>("config")
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
-    connected: false,
-    lastSync: null,
-    employeeCount: null,
-  })
-  const [syncLog, setSyncLog] = useState<
-    { action: string; count: number; status: string }[]
-  >([])
 
-  // Load saved config on mount
+  // Preview state
+  const [employees, setEmployees] = useState<PreviewEmployee[]>([])
+  const [roleDefinitions, setRoleDefinitions] = useState<RoleDefinition[]>([])
+  const [missingRoles, setMissingRoles] = useState<string[]>([])
+  const [roleMappings, setRoleMappings] = useState<RoleMapping[]>([])
+
+  // Result state
+  const [syncLog, setSyncLog] = useState<{ action: string; count: number; status: string }[]>([])
+
+  // Load config on mount
   useEffect(() => {
     async function loadConfig() {
       if (!supabase) return
       const { data: user } = await supabase.auth.getUser()
       if (!user.user) return
-
       const { data: profile } = await supabase
         .from("profiles")
         .select("organization_id")
         .eq("id", user.user.id)
         .single()
-
       if (!profile?.organization_id) return
 
-      const { data: org } = await supabase
-        .from("organizations")
-        .select("*")
-        .eq("id", profile.organization_id)
-        .single()
-
-      // Check if HiBob config exists in org metadata
-      // For now we store it in localStorage as a simple approach
       const saved = localStorage.getItem(`hibob_config_${profile.organization_id}`)
       if (saved) {
         const config = JSON.parse(saved)
-        setApiToken(config.apiToken ? "••••••••" : "")
-        setServiceUserId(config.serviceUserId || "")
-        setSyncStatus({
-          connected: !!config.apiToken,
-          lastSync: config.lastSync || null,
-          employeeCount: config.employeeCount || null,
-        })
+        if (config.apiToken) {
+          setApiToken("••••••••")
+          setServiceUserId(config.serviceUserId || "")
+          setConnected(true)
+        }
       }
     }
     loadConfig()
   }, [])
 
+  async function getOrgId(): Promise<string> {
+    if (!supabase) throw new Error("Not connected")
+    const { data: user } = await supabase.auth.getUser()
+    if (!user.user) throw new Error("Not authenticated")
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("organization_id")
+      .eq("id", user.user.id)
+      .single()
+    if (!profile?.organization_id) throw new Error("No organization")
+    return profile.organization_id
+  }
+
   async function handleSaveConfig(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     setError(null)
-    setSuccess(null)
-
     try {
-      if (!supabase) throw new Error("Not connected")
-      const { data: user } = await supabase.auth.getUser()
-      if (!user.user) throw new Error("Not authenticated")
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("organization_id")
-        .eq("id", user.user.id)
-        .single()
-
-      if (!profile?.organization_id) throw new Error("No organization")
-
-      // Test connection by attempting to fetch from HiBob API
-      const testResponse = await fetch("/api/integrations/hibob/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiToken: apiToken.includes("••••") ? undefined : apiToken,
-          serviceUserId,
-        }),
-      })
-
-      // Save config (in production, encrypt the token server-side)
-      const config = {
-        apiToken: apiToken.includes("••••") ? undefined : apiToken,
-        serviceUserId,
-        lastSync: null,
-        employeeCount: null,
-      }
-
-      // For demo: save to localStorage (production: use encrypted DB field)
-      const existing = localStorage.getItem(`hibob_config_${profile.organization_id}`)
+      const orgId = await getOrgId()
+      const existing = localStorage.getItem(`hibob_config_${orgId}`)
       const existingConfig = existing ? JSON.parse(existing) : {}
       const merged = {
         ...existingConfig,
-        ...config,
-        apiToken: config.apiToken || existingConfig.apiToken,
+        serviceUserId,
+        apiToken: apiToken.includes("••••") ? existingConfig.apiToken : apiToken,
       }
-      localStorage.setItem(`hibob_config_${profile.organization_id}`, JSON.stringify(merged))
-
-      setSyncStatus((prev) => ({ ...prev, connected: true }))
-      setSuccess("HiBob credentials saved successfully. You can now sync your people.")
+      localStorage.setItem(`hibob_config_${orgId}`, JSON.stringify(merged))
+      setConnected(true)
+      setSuccess("Credentials saved.")
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save configuration")
+      setError(err instanceof Error ? err.message : "Failed to save")
     } finally {
       setSaving(false)
     }
   }
 
-  async function handleSync() {
-    setSyncing(true)
+  // Step 1: Fetch preview
+  async function handleFetchPreview() {
+    setLoading(true)
     setError(null)
-    setSuccess(null)
-    setSyncLog([])
-
     try {
-      if (!supabase) throw new Error("Not connected")
-      const { data: user } = await supabase.auth.getUser()
-      if (!user.user) throw new Error("Not authenticated")
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("organization_id")
-        .eq("id", user.user.id)
-        .single()
-
-      if (!profile?.organization_id) throw new Error("No organization")
-
-      // Call the sync API endpoint
-      const response = await fetch("/api/integrations/hibob/sync", {
+      const orgId = await getOrgId()
+      const res = await fetch("/api/integrations/hibob/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId: profile.organization_id }),
+        body: JSON.stringify({ organizationId: orgId }),
+      })
+      if (!res.ok) {
+        const body = await res.json()
+        throw new Error(body.error || "Preview failed")
+      }
+      const data = await res.json()
+      setEmployees(data.employees)
+      setMissingRoles(data.missingRoles)
+      setRoleDefinitions(data.roleDefinitions)
+
+      // Initialize role mappings for missing roles
+      setRoleMappings(
+        data.missingRoles.map((title: string) => ({
+          hibobTitle: title,
+          appRoleId: null,
+          appRoleName: title,
+          defaultBillRate: null,
+          createNew: true,
+        }))
+      )
+
+      setStep("preview")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch preview")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Toggle employee selection
+  function toggleEmployee(index: number) {
+    setEmployees((prev) =>
+      prev.map((e, i) => (i === index ? { ...e, selected: !e.selected } : e))
+    )
+  }
+
+  function selectAll(selected: boolean) {
+    setEmployees((prev) => prev.map((e) => ({ ...e, selected })))
+  }
+
+  // Update role mapping
+  function updateRoleMapping(index: number, updates: Partial<RoleMapping>) {
+    setRoleMappings((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, ...updates } : m))
+    )
+  }
+
+  // Step 3: Confirm & sync
+  async function handleSync() {
+    setLoading(true)
+    setError(null)
+    try {
+      const orgId = await getOrgId()
+      const selected = employees.filter((e) => e.selected)
+
+      const res = await fetch("/api/integrations/hibob/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: orgId,
+          selectedEmployees: selected,
+          roleMappings: roleMappings.filter((m) => m.createNew),
+          createMissingRoles: true,
+        }),
       })
 
-      if (!response.ok) {
-        const body = await response.json()
+      if (!res.ok) {
+        const body = await res.json()
         throw new Error(body.error || "Sync failed")
       }
 
-      const result = await response.json()
-
+      const result = await res.json()
       setSyncLog(result.log || [])
-      setSyncStatus((prev) => ({
-        ...prev,
-        lastSync: new Date().toISOString(),
-        employeeCount: result.employeeCount || prev.employeeCount,
-      }))
 
-      // Update localStorage
-      const saved = localStorage.getItem(`hibob_config_${profile.organization_id}`)
+      // Update local config
+      const saved = localStorage.getItem(`hibob_config_${orgId}`)
       if (saved) {
         const config = JSON.parse(saved)
         config.lastSync = new Date().toISOString()
         config.employeeCount = result.employeeCount
-        localStorage.setItem(`hibob_config_${profile.organization_id}`, JSON.stringify(config))
+        localStorage.setItem(`hibob_config_${orgId}`, JSON.stringify(config))
       }
 
-      setSuccess(`Sync completed! ${result.employeeCount || 0} employees processed.`)
+      setStep("result")
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed")
     } finally {
-      setSyncing(false)
+      setLoading(false)
     }
   }
 
+  const selectedCount = employees.filter((e) => e.selected).length
+  const newCount = employees.filter((e) => e.selected && !e.isDuplicate).length
+  const updateCount = employees.filter((e) => e.selected && e.isDuplicate).length
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-4xl">
       <Link
         href="/integrations"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -221,68 +279,348 @@ export function HiBobIntegration() {
             </div>
             <Badge
               className={`border ${
-                syncStatus.connected
+                connected
                   ? "bg-green-100 text-green-800 border-green-200"
                   : "bg-gray-100 text-gray-500 border-gray-200"
               }`}
             >
-              {syncStatus.connected ? "Connected" : "Not Connected"}
+              {connected ? "Connected" : "Not Connected"}
             </Badge>
           </div>
         </CardHeader>
-        <CardContent>
-          {syncStatus.connected && (
-            <div className="flex items-center gap-6 text-sm text-muted-foreground">
-              {syncStatus.lastSync && (
-                <span>
-                  Last sync: {new Date(syncStatus.lastSync).toLocaleString()}
-                </span>
-              )}
-              {syncStatus.employeeCount != null && (
-                <span className="flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5" />
-                  {syncStatus.employeeCount} employees
-                </span>
-              )}
-            </div>
-          )}
-        </CardContent>
       </Card>
 
-      {/* Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Plug className="h-4 w-4" />
-            API Configuration
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSaveConfig} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Service User ID</label>
-              <Input
-                value={serviceUserId}
-                onChange={(e) => setServiceUserId(e.target.value)}
-                placeholder="your-service-user@company.com"
-              />
-              <p className="text-xs text-muted-foreground">
-                The email of the HiBob service user with API access.
-              </p>
+      {/* Step: Config */}
+      {step === "config" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Plug className="h-4 w-4" />
+              API Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSaveConfig} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Service User ID</label>
+                <Input
+                  value={serviceUserId}
+                  onChange={(e) => setServiceUserId(e.target.value)}
+                  placeholder="your-service-user@company.com"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">API Token</label>
+                <Input
+                  type="password"
+                  value={apiToken}
+                  onChange={(e) => setApiToken(e.target.value)}
+                  placeholder="Enter your HiBob API token"
+                />
+              </div>
+
+              {error && (
+                <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div className="flex items-center gap-2 rounded-md bg-green-50 p-3 text-sm text-green-700">
+                  <Check className="h-4 w-4 shrink-0" />
+                  {success}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Saving..." : "Save Configuration"}
+                </Button>
+                {connected && (
+                  <Button type="button" onClick={handleFetchPreview} disabled={loading}>
+                    {loading ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Fetching...
+                      </>
+                    ) : (
+                      <>
+                        <Users className="h-4 w-4 mr-2" />
+                        Fetch People from HiBob
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step: Preview — select people to import */}
+      {step === "preview" && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Users className="h-4 w-4" />
+                Select People to Import ({employees.length} found in HiBob)
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => selectAll(true)}>
+                  Select All
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => selectAll(false)}>
+                  Deselect All
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="border rounded-lg overflow-auto max-h-[500px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[40px]" />
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Job Title</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {employees.map((emp, i) => (
+                    <TableRow
+                      key={emp.hibobId || emp.email}
+                      className={emp.selected ? "" : "opacity-50"}
+                    >
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={emp.selected}
+                          onChange={() => toggleEmployee(i)}
+                          className="rounded border-input"
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">{emp.fullName}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {emp.email}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          {emp.jobTitle || "\u2014"}
+                          {!emp.roleExists && emp.jobTitle && (
+                            <Badge className="border bg-amber-100 text-amber-800 border-amber-200 text-xs">
+                              New Role
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>{emp.department || "\u2014"}</TableCell>
+                      <TableCell>
+                        {emp.isDuplicate ? (
+                          emp.hasChanges ? (
+                            <Badge className="border bg-blue-100 text-blue-800 border-blue-200">
+                              Update
+                            </Badge>
+                          ) : (
+                            <Badge className="border bg-gray-100 text-gray-500 border-gray-200">
+                              Exists
+                            </Badge>
+                          )
+                        ) : (
+                          <Badge className="border bg-green-100 text-green-800 border-green-200">
+                            New
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">API Token</label>
-              <Input
-                type="password"
-                value={apiToken}
-                onChange={(e) => setApiToken(e.target.value)}
-                placeholder="Enter your HiBob API token"
-              />
-              <p className="text-xs text-muted-foreground">
-                Generate a token in HiBob under Settings &gt; Integrations &gt; API.
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-sm text-muted-foreground">
+                {selectedCount} selected: {newCount} new, {updateCount} to update
               </p>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setStep("config")}>
+                  Back
+                </Button>
+                <Button
+                  onClick={() =>
+                    missingRoles.length > 0 ? setStep("roles") : setStep("confirm")
+                  }
+                  disabled={selectedCount === 0}
+                >
+                  Next
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step: Role Mapping */}
+      {step === "roles" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              Map HiBob Roles ({missingRoles.length} not found in your Role Definitions)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              The following job titles from HiBob don&apos;t match any of your defined roles.
+              Choose how to handle each one.
+            </p>
+
+            <div className="border rounded-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>HiBob Job Title</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Map To / Create As</TableHead>
+                    <TableHead>Default Bill Rate</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {roleMappings.map((mapping, i) => (
+                    <TableRow key={mapping.hibobTitle}>
+                      <TableCell className="font-medium">
+                        {mapping.hibobTitle}
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          className="h-8 text-xs w-[160px]"
+                          value={mapping.createNew ? "create" : "map"}
+                          onChange={(e) => {
+                            const createNew = e.target.value === "create"
+                            updateRoleMapping(i, {
+                              createNew,
+                              appRoleId: createNew ? null : (roleDefinitions[0]?.id || null),
+                              appRoleName: createNew ? mapping.hibobTitle : (roleDefinitions[0]?.name || ""),
+                            })
+                          }}
+                        >
+                          <SelectOption value="create">Create New Role</SelectOption>
+                          {roleDefinitions.length > 0 && (
+                            <SelectOption value="map">Map to Existing</SelectOption>
+                          )}
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        {mapping.createNew ? (
+                          <Input
+                            className="h-8 text-xs"
+                            value={mapping.appRoleName}
+                            onChange={(e) =>
+                              updateRoleMapping(i, { appRoleName: e.target.value })
+                            }
+                          />
+                        ) : (
+                          <Select
+                            className="h-8 text-xs"
+                            value={mapping.appRoleId || ""}
+                            onChange={(e) => {
+                              const rd = roleDefinitions.find((r) => r.id === e.target.value)
+                              updateRoleMapping(i, {
+                                appRoleId: e.target.value,
+                                appRoleName: rd?.name || "",
+                                defaultBillRate: rd?.default_bill_rate || null,
+                              })
+                            }}
+                          >
+                            {roleDefinitions.map((rd) => (
+                              <SelectOption key={rd.id} value={rd.id}>
+                                {rd.name}
+                                {rd.default_bill_rate
+                                  ? ` (${Number(rd.default_bill_rate).toFixed(0)}/h)`
+                                  : ""}
+                              </SelectOption>
+                            ))}
+                          </Select>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {mapping.createNew && (
+                          <Input
+                            className="h-8 text-xs w-[100px]"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={mapping.defaultBillRate ?? ""}
+                            onChange={(e) =>
+                              updateRoleMapping(i, {
+                                defaultBillRate: e.target.value ? Number(e.target.value) : null,
+                              })
+                            }
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={() => setStep("preview")}>
+                Back
+              </Button>
+              <Button onClick={() => setStep("confirm")}>
+                Next
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step: Confirm */}
+      {step === "confirm" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Confirm Import</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-lg border p-4 text-center">
+                <div className="text-2xl font-bold text-green-600">{newCount}</div>
+                <div className="text-sm text-muted-foreground">New people to invite</div>
+              </div>
+              <div className="rounded-lg border p-4 text-center">
+                <div className="text-2xl font-bold text-blue-600">{updateCount}</div>
+                <div className="text-sm text-muted-foreground">Existing profiles to update</div>
+              </div>
+            </div>
+
+            {roleMappings.filter((m) => m.createNew).length > 0 && (
+              <div className="rounded-lg border p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Plus className="h-4 w-4 text-amber-500" />
+                  <span className="font-medium text-sm">
+                    {roleMappings.filter((m) => m.createNew).length} new role definitions will be created:
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {roleMappings
+                    .filter((m) => m.createNew)
+                    .map((m) => (
+                      <Badge key={m.hibobTitle} className="border bg-amber-100 text-amber-800 border-amber-200">
+                        {m.appRoleName}
+                        {m.defaultBillRate ? ` (${m.defaultBillRate}/h)` : ""}
+                      </Badge>
+                    ))}
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -291,97 +629,88 @@ export function HiBobIntegration() {
               </div>
             )}
 
-            {success && (
-              <div className="flex items-center gap-2 rounded-md bg-green-50 p-3 text-sm text-green-700">
-                <Check className="h-4 w-4 shrink-0" />
-                {success}
-              </div>
-            )}
+            <Separator />
 
-            <div className="flex gap-2">
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving..." : "Save Configuration"}
+            <div className="flex justify-between">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  missingRoles.length > 0 ? setStep("roles") : setStep("preview")
+                }
+              >
+                Back
+              </Button>
+              <Button onClick={handleSync} disabled={loading}>
+                {loading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Confirm &amp; Import
+                  </>
+                )}
               </Button>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Sync */}
-      {syncStatus.connected && (
+      {/* Step: Result */}
+      {step === "result" && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <RefreshCw className="h-4 w-4" />
-              Sync People
+            <CardTitle className="flex items-center gap-2 text-base text-green-700">
+              <Check className="h-5 w-5" />
+              Import Complete
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Sync will import employees from HiBob and create or update profiles in OverIT Planner.
-              Matching is done by email address.
-            </p>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Count</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {syncLog.map((entry, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{entry.action}</TableCell>
+                    <TableCell>{entry.count}</TableCell>
+                    <TableCell>
+                      <Badge
+                        className={`border ${
+                          entry.status === "success"
+                            ? "bg-green-100 text-green-800 border-green-200"
+                            : "bg-red-100 text-red-800 border-red-200"
+                        }`}
+                      >
+                        {entry.status}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
 
-            <div className="text-sm space-y-1">
-              <p className="font-medium">Data synced from HiBob:</p>
-              <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
-                <li>Employee name, email, job title</li>
-                <li>Department and team</li>
-                <li>Start date and location</li>
-                <li>Time-off / absences</li>
-              </ul>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => { setStep("config"); setError(null); setSuccess(null) }}>
+                Done
+              </Button>
+              <Button variant="outline" onClick={handleFetchPreview}>
+                Run Another Sync
+              </Button>
+              <Link href="/people">
+                <Button>
+                  <Users className="h-4 w-4 mr-2" />
+                  View People
+                </Button>
+              </Link>
             </div>
-
-            <Separator />
-
-            <Button onClick={handleSync} disabled={syncing}>
-              {syncing ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Sync Now
-                </>
-              )}
-            </Button>
-
-            {/* Sync Log */}
-            {syncLog.length > 0 && (
-              <div className="mt-4">
-                <h4 className="text-sm font-medium mb-2">Sync Results</h4>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Count</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {syncLog.map((entry, i) => (
-                      <TableRow key={i}>
-                        <TableCell>{entry.action}</TableCell>
-                        <TableCell>{entry.count}</TableCell>
-                        <TableCell>
-                          <Badge
-                            className={`border ${
-                              entry.status === "success"
-                                ? "bg-green-100 text-green-800 border-green-200"
-                                : "bg-red-100 text-red-800 border-red-200"
-                            }`}
-                          >
-                            {entry.status}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
           </CardContent>
         </Card>
       )}
