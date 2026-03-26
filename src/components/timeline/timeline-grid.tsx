@@ -28,6 +28,7 @@ import type {
   Profile,
   PublicHoliday,
 } from "@/lib/types/database"
+import type { OpenRoleWithProject } from "@/components/timeline/timeline-view"
 
 interface TimelineGridProps {
   profiles: Profile[]
@@ -37,6 +38,7 @@ interface TimelineGridProps {
   })[]
   absences: Absence[]
   holidays: PublicHoliday[]
+  openRoles?: OpenRoleWithProject[]
   onCellClick: (profileId: string, date: Date) => void
   onAllocationClick: (allocation: Allocation) => void
 }
@@ -46,6 +48,7 @@ export function TimelineGrid({
   allocations,
   absences,
   holidays,
+  openRoles = [],
   onCellClick,
   onAllocationClick,
 }: TimelineGridProps) {
@@ -184,10 +187,90 @@ export function TimelineGrid({
             />
           )
         })}
-        {profiles.length === 0 && (
+        {profiles.length === 0 && openRoles.length === 0 && (
           <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
             No people to display
           </div>
+        )}
+
+        {/* Open Roles Section */}
+        {openRoles.length > 0 && (
+          <>
+            {/* Section header row */}
+            <div
+              className="border-b bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800"
+              style={{ height: ROW_HEIGHT, width: totalWidth }}
+            />
+            {/* Open role rows with project date range blocks */}
+            {openRoles.map((role) => {
+              const projStart = role.project?.start_date
+                ? parseISO(role.project.start_date)
+                : null
+              const projEnd = role.project?.end_date
+                ? parseISO(role.project.end_date)
+                : null
+
+              // Only show block if project has dates within the view range
+              const blockStart =
+                projStart && projStart >= startDate
+                  ? projStart
+                  : startDate
+              const blockEnd =
+                projEnd && projEnd <= endDate ? projEnd : endDate
+
+              const showBlock = projStart || projEnd
+
+              const left = showBlock ? getPosition(blockStart) : 0
+              const right = showBlock ? getPosition(blockEnd) : 0
+              const width = showBlock
+                ? right - left + colWidth * (zoom === "day" ? 1 : 0.15)
+                : 0
+
+              return (
+                <div
+                  key={role.id}
+                  className="relative border-b bg-amber-50/30 dark:bg-amber-950/10"
+                  style={{ height: ROW_HEIGHT, width: totalWidth }}
+                >
+                  {/* Background grid cells */}
+                  <div className="absolute inset-0 flex">
+                    {columns.map((col) => {
+                      const dateStr = format(
+                        col,
+                        zoom === "month" ? "yyyy-MM" : "yyyy-MM-dd"
+                      )
+                      return (
+                        <div
+                          key={dateStr}
+                          className="border-r h-full"
+                          style={{ width: colWidth, minWidth: colWidth }}
+                        />
+                      )
+                    })}
+                  </div>
+                  {/* Dashed block showing needed period */}
+                  {showBlock && width > 0 && (
+                    <div
+                      className="absolute top-2 rounded-md flex items-center px-2 text-xs font-medium truncate"
+                      style={{
+                        left: Math.max(left, 0),
+                        width: Math.max(width, 40),
+                        height: 30,
+                        backgroundColor: `${role.project?.color || "#f59e0b"}20`,
+                        border: `2px dashed ${role.project?.color || "#f59e0b"}`,
+                        color: role.project?.color || "#f59e0b",
+                      }}
+                      title={`${role.title} — ${role.project?.name} (unallocated)`}
+                    >
+                      <span className="truncate">
+                        {role.title} — needs staffing
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </>
         )}
       </div>
     </div>

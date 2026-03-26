@@ -14,9 +14,14 @@ import type {
   Absence,
   Profile,
   Project,
+  ProjectRole,
   PublicHoliday,
   Skill,
 } from "@/lib/types/database"
+
+export interface OpenRoleWithProject extends ProjectRole {
+  project: Pick<Project, "id" | "name" | "status" | "start_date" | "end_date" | "color">
+}
 
 interface TimelineViewProps {
   initialProfiles: Profile[]
@@ -28,6 +33,7 @@ interface TimelineViewProps {
   initialHolidays: PublicHoliday[]
   projects: Project[]
   skills: Skill[]
+  initialOpenRoles?: OpenRoleWithProject[]
 }
 
 export function TimelineView({
@@ -37,6 +43,7 @@ export function TimelineView({
   initialHolidays,
   projects,
   skills,
+  initialOpenRoles = [],
 }: TimelineViewProps) {
   const { startDate, endDate, filters, zoom } = useTimelineStore()
 
@@ -44,6 +51,7 @@ export function TimelineView({
   const [allocations, setAllocations] = useState(initialAllocations)
   const [absences, setAbsences] = useState(initialAbsences)
   const [holidays, setHolidays] = useState(initialHolidays)
+  const [openRoles, setOpenRoles] = useState(initialOpenRoles)
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -190,14 +198,21 @@ export function TimelineView({
       const supabase = createClient()
       if (!supabase) return
 
-      const { data } = await supabase
-        .from("allocations")
-        .select("*, project:projects(*), profile:profiles(*)")
-        .lte("start_date", endStr)
-        .gte("end_date", startStr)
-        .order("start_date")
+      const [allocResult, rolesResult] = await Promise.all([
+        supabase
+          .from("allocations")
+          .select("*, project:projects(*), profile:profiles(*)")
+          .lte("start_date", endStr)
+          .gte("end_date", startStr)
+          .order("start_date"),
+        supabase
+          .from("project_roles")
+          .select("*, project:projects(id, name, status, start_date, end_date, color)")
+          .eq("is_filled", false),
+      ])
 
-      if (data) setAllocations(data as typeof allocations)
+      if (allocResult.data) setAllocations(allocResult.data as typeof allocations)
+      if (rolesResult.data) setOpenRoles(rolesResult.data as OpenRoleWithProject[])
     }
 
     refetch()
@@ -223,7 +238,7 @@ export function TimelineView({
           className="overflow-hidden"
           style={{ width: 240, minWidth: 240 }}
         >
-          <TimelineSidebar profiles={filteredProfiles} />
+          <TimelineSidebar profiles={filteredProfiles} openRoles={openRoles} />
         </div>
 
         {/* Grid */}
@@ -237,6 +252,7 @@ export function TimelineView({
             allocations={filteredAllocations}
             absences={absences}
             holidays={holidays}
+            openRoles={openRoles}
             onCellClick={handleCellClick}
             onAllocationClick={handleAllocationClick}
           />
