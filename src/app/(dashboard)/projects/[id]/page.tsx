@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import { getProject } from "@/lib/actions/projects"
 import { getClients } from "@/lib/actions/clients"
 import { getProfiles } from "@/lib/actions/people"
+import { getRoleDefinitions } from "@/lib/actions/role-definitions"
 import { ProjectDetailTabs } from "@/components/projects/project-detail-tabs"
 
 export default async function ProjectDetailsPage({
@@ -11,10 +12,11 @@ export default async function ProjectDetailsPage({
 }) {
   const { id } = await params
 
-  const [project, clients, profiles] = await Promise.all([
+  const [project, clients, profiles, roleDefinitions] = await Promise.all([
     getProject(id),
     getClients(),
     getProfiles(),
+    getRoleDefinitions(),
   ])
 
   if (!project) notFound()
@@ -38,6 +40,7 @@ export default async function ProjectDetailsPage({
         project={project}
         clients={clients.map((c) => ({ id: c.id, name: c.name }))}
         profiles={profiles.map((p) => ({ id: p.id, full_name: p.full_name }))}
+        roleDefinitions={roleDefinitions}
       />
     </div>
   )
