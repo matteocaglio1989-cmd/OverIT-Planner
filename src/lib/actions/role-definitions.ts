@@ -81,3 +81,63 @@ export async function deleteRoleDefinition(id: string) {
 
   revalidatePath("/settings/roles")
 }
+
+export async function syncRolesFromProjects(): Promise<{ imported: number; skipped: number }> {
+  const { supabase, organizationId } = await getOrgId()
+
+  // Get existing role definition names
+  const { data: existing } = await supabase
+    .from("role_definitions")
+    .select("name")
+    .eq("organization_id", organizationId)
+
+  const existingNames = new Set((existing || []).map((r) => r.name.toLowerCase()))
+
+  // Get distinct project role titles with their max bill rate
+  const { data: projectRoles } = await supabase
+    .from("project_roles")
+    .select("title, bill_rate, projects!inner(organization_id)")
+    .eq("projects.organization_id", organizationId)
+
+  if (!projectRoles || projectRoles.length === 0) {
+    return { imported: 0, skipped: 0 }
+  }
+
+  // Deduplicate by title, keeping the highest bill rate
+  const roleMap = new Map<string, number | null>()
+  for (const pr of projectRoles) {
+    const key = pr.title.toLowerCase()
+    if (!existingNames.has(key)) {
+      const currentRate = roleMap.get(key)
+      const newRate = pr.bill_rate ? Number(pr.bill_rate) : null
+      if (currentRate === undefined || (newRate && (!currentRate || newRate > currentRate))) {
+        roleMap.set(key, newRate)
+      } else if (!roleMap.has(key)) {
+        roleMap.set(key, newRate)
+      }
+    }
+  }
+
+  // Keep original casing from first occurrence
+  const titleCasing = new Map<string, string>()
+  for (const pr of projectRoles) {
+    const key = pr.title.toLowerCase()
+    if (!titleCasing.has(key)) titleCasing.set(key, pr.title)
+  }
+
+  let imported = 0
+  for (const [key, billRate] of roleMap) {
+    const { error } = await supabase.from("role_definitions").insert({
+      organization_id: organizationId,
+      name: titleCasing.get(key) || key,
+      default_bill_rate: billRate,
+      description: "Imported from project roles",
+    })
+    if (!error) imported++
+  }
+
+  const skipped = (projectRoles.length > 0 ? new Set(projectRoles.map((r) => r.title.toLowerCase())).size : 0) - roleMap.size
+
+  revalidatePath("/settings/roles")
+  return { imported, skipped }
+}

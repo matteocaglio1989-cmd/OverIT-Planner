@@ -20,12 +20,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Plus, Pencil, Trash2 } from "lucide-react"
+import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react"
 import type { RoleDefinition } from "@/lib/types/database"
 import {
   createRoleDefinition,
   updateRoleDefinition,
   deleteRoleDefinition,
+  syncRolesFromProjects,
 } from "@/lib/actions/role-definitions"
 
 interface RolesManagerProps {
@@ -36,6 +37,8 @@ export function RolesManager({ roleDefinitions }: RolesManagerProps) {
   const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingRole, setEditingRole] = useState<RoleDefinition | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncResult, setSyncResult] = useState<string | null>(null)
 
   function handleEdit(role: RoleDefinition) {
     setEditingRole(role)
@@ -59,6 +62,24 @@ export function RolesManager({ roleDefinitions }: RolesManagerProps) {
     router.refresh()
   }
 
+  async function handleSyncFromProjects() {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const result = await syncRolesFromProjects()
+      setSyncResult(
+        result.imported > 0
+          ? `Imported ${result.imported} role${result.imported > 1 ? "s" : ""} from projects${result.skipped > 0 ? ` (${result.skipped} already existed)` : ""}.`
+          : "No new roles to import — all project roles already have definitions."
+      )
+      router.refresh()
+    } catch {
+      setSyncResult("Failed to sync roles from projects.")
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -68,11 +89,23 @@ export function RolesManager({ roleDefinitions }: RolesManagerProps) {
             Define roles with preset bill rates. These roles appear as options when staffing projects.
           </p>
         </div>
-        <Button onClick={handleAdd}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Role
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleSyncFromProjects} disabled={syncing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing..." : "Import from Projects"}
+          </Button>
+          <Button onClick={handleAdd}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Role
+          </Button>
+        </div>
       </div>
+
+      {syncResult && (
+        <div className="rounded-md bg-muted p-3 text-sm">
+          {syncResult}
+        </div>
+      )}
 
       <div className="border rounded-lg">
         <Table>
