@@ -213,7 +213,17 @@ export async function inviteMember(email: string, role: "admin" | "manager" | "c
       })
     }
 
+    // Record the pending invite
+    await supabase.from("pending_invites").insert({
+      organization_id: profile.organization_id,
+      email: email.toLowerCase(),
+      role,
+      invited_by: user.id,
+      status: "pending",
+    })
+
     revalidatePath("/settings")
+    revalidatePath("/people")
     return { success: true, message: `Invitation email sent to ${email} as ${role}.` }
   } catch (err) {
     // Fallback if SUPABASE_SERVICE_ROLE_KEY is not configured

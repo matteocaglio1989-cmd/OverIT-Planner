@@ -1,14 +1,16 @@
 import { getOrganization, getHolidays, getOrgMembers } from "@/lib/actions/settings"
+import { getPendingInvites } from "@/lib/actions/invites"
 import { OrgSettingsForm } from "@/components/settings/org-settings-form"
 import { HolidaysManager } from "@/components/settings/holidays-manager"
 import { MembersManager } from "@/components/settings/members-manager"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default async function SettingsPage() {
-  const [organization, holidays, members] = await Promise.all([
+  const [organization, holidays, members, pendingInvites] = await Promise.all([
     getOrganization(),
     getHolidays(),
     getOrgMembers(),
+    getPendingInvites(),
   ])
 
   return (
@@ -35,7 +37,7 @@ export default async function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="members" className="mt-6">
-          <MembersManager members={members} />
+          <MembersManager members={members} pendingInvites={pendingInvites} />
         </TabsContent>
       </Tabs>
     </div>

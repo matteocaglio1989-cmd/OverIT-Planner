@@ -16,8 +16,9 @@ import {
   TableCell,
 } from "@/components/ui/table"
 import { updateMemberRole, inviteMember } from "@/lib/actions/settings"
+import { PendingInvites } from "@/components/settings/pending-invites"
 import { UserPlus } from "lucide-react"
-import type { UserRole } from "@/lib/types/database"
+import type { UserRole, PendingInvite } from "@/lib/types/database"
 
 interface Member {
   id: string
@@ -29,6 +30,7 @@ interface Member {
 
 interface MembersManagerProps {
   members: Member[]
+  pendingInvites: PendingInvite[]
 }
 
 const ROLE_COLORS: Record<UserRole, "default" | "secondary" | "outline"> = {
@@ -37,7 +39,7 @@ const ROLE_COLORS: Record<UserRole, "default" | "secondary" | "outline"> = {
   consultant: "outline",
 }
 
-export function MembersManager({ members: initialMembers }: MembersManagerProps) {
+export function MembersManager({ members: initialMembers, pendingInvites }: MembersManagerProps) {
   const [members, setMembers] = useState(initialMembers)
   const [showInvite, setShowInvite] = useState(false)
   const [inviteEmail, setInviteEmail] = useState("")
@@ -70,7 +72,9 @@ export function MembersManager({ members: initialMembers }: MembersManagerProps)
   }
 
   return (
-    <Card>
+    <>
+      <PendingInvites invites={pendingInvites} />
+      <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Team Members</CardTitle>
@@ -156,6 +160,7 @@ export function MembersManager({ members: initialMembers }: MembersManagerProps)
           </TableBody>
         </Table>
       </CardContent>
-    </Card>
+      </Card>
+    </>
   )
 }
