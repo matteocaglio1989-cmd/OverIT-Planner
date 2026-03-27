@@ -87,7 +87,8 @@ export function ProjectRoles({
           <TableRow>
             <TableHead>Role</TableHead>
             <TableHead>Bill Rate</TableHead>
-            <TableHead>Est. Hours</TableHead>
+            <TableHead>FTE</TableHead>
+            <TableHead>Dates</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Assigned To</TableHead>
             <TableHead>Skills</TableHead>
@@ -97,7 +98,7 @@ export function ProjectRoles({
         <TableBody>
           {roles.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                 No roles added yet.
               </TableCell>
             </TableRow>
@@ -111,7 +112,12 @@ export function ProjectRoles({
                     : "-"}
                 </TableCell>
                 <TableCell>
-                  {role.estimated_hours != null ? `${role.estimated_hours}h` : "-"}
+                  {role.fte != null ? `${role.fte} FTE` : "-"}
+                </TableCell>
+                <TableCell>
+                  {role.start_date || role.end_date
+                    ? formatRoleDates(role.start_date, role.end_date)
+                    : "-"}
                 </TableCell>
                 <TableCell>
                   <Badge
@@ -192,6 +198,17 @@ export function ProjectRoles({
   )
 }
 
+function formatRoleDates(startDate: string | null, endDate: string | null): string {
+  const fmt = (d: string) => {
+    const date = new Date(d + "T00:00:00")
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  }
+  if (startDate && endDate) return `${fmt(startDate)} \u2014 ${fmt(endDate)}`
+  if (startDate) return fmt(startDate)
+  if (endDate) return `\u2014 ${fmt(endDate)}`
+  return "-"
+}
+
 // -------------------------------------------------------------------
 
 function RoleFormContent({
@@ -215,9 +232,11 @@ function RoleFormContent({
   const [billRate, setBillRate] = React.useState(
     role?.bill_rate != null ? String(role.bill_rate) : ""
   )
-  const [estimatedHours, setEstimatedHours] = React.useState(
-    role?.estimated_hours != null ? String(role.estimated_hours) : ""
+  const [fte, setFte] = React.useState(
+    role?.fte != null ? String(role.fte) : "1.0"
   )
+  const [roleStartDate, setRoleStartDate] = React.useState(role?.start_date ?? "")
+  const [roleEndDate, setRoleEndDate] = React.useState(role?.end_date ?? "")
   const [isFilled, setIsFilled] = React.useState(role?.is_filled ?? false)
   const [assignedProfileId, setAssignedProfileId] = React.useState(
     role?.assigned_profile_id ?? ""
@@ -244,10 +263,24 @@ function RoleFormContent({
         .map((s) => s.trim())
         .filter(Boolean)
 
+      const fteValue = fte ? Number(fte) : 1.0
+      // Calculate estimated_hours for backward compat: fte * 8 * working days
+      let estimatedHours: number | null = null
+      if (roleStartDate && roleEndDate) {
+        const start = new Date(roleStartDate)
+        const end = new Date(roleEndDate)
+        const diffDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
+        const workDays = Math.ceil(diffDays * (5 / 7))
+        estimatedHours = fteValue * 8 * workDays
+      }
+
       const data = {
         title,
         bill_rate: billRate ? Number(billRate) : null,
-        estimated_hours: estimatedHours ? Number(estimatedHours) : null,
+        estimated_hours: estimatedHours,
+        fte: fteValue,
+        start_date: roleStartDate || null,
+        end_date: roleEndDate || null,
         is_filled: isFilled,
         assigned_profile_id: assignedProfileId || null,
         required_skills,
@@ -308,13 +341,33 @@ function RoleFormContent({
           />
         </div>
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Estimated Hours</label>
+          <label className="text-sm font-medium">FTE</label>
           <Input
             type="number"
             min="0"
-            step="0.5"
-            value={estimatedHours}
-            onChange={(e) => setEstimatedHours(e.target.value)}
+            max="1"
+            step="0.1"
+            value={fte}
+            onChange={(e) => setFte(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Start Date</label>
+          <Input
+            type="date"
+            value={roleStartDate}
+            onChange={(e) => setRoleStartDate(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">End Date</label>
+          <Input
+            type="date"
+            value={roleEndDate}
+            onChange={(e) => setRoleEndDate(e.target.value)}
           />
         </div>
       </div>

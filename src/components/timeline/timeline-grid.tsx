@@ -214,11 +214,12 @@ export function TimelineGrid({
             </div>
             {/* Open role rows with project date range blocks */}
             {openRoles.map((role) => {
-              const projStart = role.project?.start_date
-                ? parseISO(role.project.start_date)
+              // Use role-specific dates if set, otherwise fall back to project dates
+              const projStart = (role.start_date || role.project?.start_date)
+                ? parseISO(role.start_date || role.project!.start_date!)
                 : null
-              const projEnd = role.project?.end_date
-                ? parseISO(role.project.end_date)
+              const projEnd = (role.end_date || role.project?.end_date)
+                ? parseISO(role.end_date || role.project!.end_date!)
                 : null
 
               // Only show block if project has dates within the view range

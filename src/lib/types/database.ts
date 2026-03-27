@@ -106,6 +106,9 @@ export interface ProjectRole {
   required_skills: string[]
   bill_rate: number | null
   estimated_hours: number | null
+  start_date: string | null
+  end_date: string | null
+  fte: number
   is_filled: boolean
   assigned_profile_id: string | null
   created_at: string

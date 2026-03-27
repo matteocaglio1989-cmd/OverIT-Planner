@@ -264,11 +264,16 @@ export async function createProjectRole(
     required_skills?: string[]
     bill_rate?: number | null
     estimated_hours?: number | null
+    start_date?: string | null
+    end_date?: string | null
+    fte?: number
     is_filled?: boolean
     assigned_profile_id?: string | null
   }
 ) {
   const supabase = await createClient()
+
+  const fteValue = data.fte ?? 1.0
 
   const { data: role, error } = await supabase
     .from("project_roles")
@@ -279,6 +284,9 @@ export async function createProjectRole(
       required_skills: data.required_skills ?? [],
       bill_rate: data.bill_rate ?? null,
       estimated_hours: data.estimated_hours ?? null,
+      start_date: data.start_date || null,
+      end_date: data.end_date || null,
+      fte: fteValue,
       is_filled: data.assigned_profile_id ? true : (data.is_filled ?? false),
       assigned_profile_id: data.assigned_profile_id || null,
     })
@@ -297,8 +305,9 @@ export async function createProjectRole(
       .single()
 
     if (project) {
-      const startDate = project.start_date || new Date().toISOString().split("T")[0]
-      const endDate = project.end_date || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]
+      // Use role dates if set, otherwise fall back to project dates
+      const startDate = data.start_date || project.start_date || new Date().toISOString().split("T")[0]
+      const endDate = data.end_date || project.end_date || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]
 
       await supabase.from("allocations").insert({
         organization_id: project.organization_id,
@@ -307,7 +316,7 @@ export async function createProjectRole(
         project_role_id: role.id,
         start_date: startDate,
         end_date: endDate,
-        hours_per_day: data.estimated_hours ? Math.min(data.estimated_hours / 20, 8) : 8,
+        hours_per_day: fteValue * 8,
         bill_rate: data.bill_rate ?? null,
         status: "confirmed",
       })
@@ -329,6 +338,9 @@ export async function updateProjectRole(
       | "required_skills"
       | "bill_rate"
       | "estimated_hours"
+      | "start_date"
+      | "end_date"
+      | "fte"
       | "is_filled"
       | "assigned_profile_id"
     >
@@ -379,8 +391,13 @@ export async function updateProjectRole(
     } else if (!oldProfileId && newProfileId) {
       // Person was newly assigned — create allocation
       if (project) {
-        const startDate = project.start_date || new Date().toISOString().split("T")[0]
-        const endDate = project.end_date || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]
+        // Use role dates if set, otherwise fall back to project dates
+        const roleStartDate = data.start_date ?? currentRole.start_date
+        const roleEndDate = data.end_date ?? currentRole.end_date
+        const startDate = roleStartDate || project.start_date || new Date().toISOString().split("T")[0]
+        const endDate = roleEndDate || project.end_date || new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]
+
+        const fteValue = data.fte ?? currentRole.fte ?? 1.0
 
         await supabase.from("allocations").insert({
           organization_id: project.organization_id,
@@ -389,11 +406,7 @@ export async function updateProjectRole(
           project_role_id: id,
           start_date: startDate,
           end_date: endDate,
-          hours_per_day: data.estimated_hours
-            ? Math.min(Number(data.estimated_hours) / 20, 8)
-            : currentRole.estimated_hours
-              ? Math.min(Number(currentRole.estimated_hours) / 20, 8)
-              : 8,
+          hours_per_day: fteValue * 8,
           bill_rate: data.bill_rate ?? currentRole.bill_rate ?? null,
           status: "confirmed",
         })
@@ -416,9 +429,9 @@ export async function updateProjectRole(
       .eq("project_role_id", id)
   }
 
-  // Propagate estimated_hours changes to allocation hours_per_day
-  if ("estimated_hours" in data && data.estimated_hours !== undefined && data.estimated_hours !== null) {
-    const newHoursPerDay = Math.min(Number(data.estimated_hours) / 20, 8)
+  // Propagate FTE changes to allocation hours_per_day
+  if ("fte" in data && data.fte !== undefined) {
+    const newHoursPerDay = Number(data.fte) * 8
     await supabase
       .from("allocations")
       .update({ hours_per_day: newHoursPerDay })

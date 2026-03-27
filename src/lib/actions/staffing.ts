@@ -323,14 +323,13 @@ export async function quickAssign(
 
   if (roleError || !role) throw roleError ?? new Error("Role not found")
 
-  // Calculate hours_per_day from estimated_hours and date range
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-  const diffDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
-  const workDays = Math.ceil(diffDays * (5 / 7))
-  const hoursPerDay = role.estimated_hours
-    ? Math.min(8, role.estimated_hours / Math.max(1, workDays))
-    : 8
+  // Use role-specific dates if available, otherwise use provided dates
+  const effectiveStartDate = role.start_date || startDate
+  const effectiveEndDate = role.end_date || endDate
+
+  // Use FTE to calculate hours_per_day (1 FTE = 8 hours/day)
+  const fteValue = role.fte ?? 1.0
+  const hoursPerDay = fteValue * 8
 
   // Create allocation
   const { error: allocError } = await supabase.from("allocations").insert({
@@ -338,9 +337,9 @@ export async function quickAssign(
     project_id: role.project_id,
     profile_id: profileId,
     project_role_id: roleId,
-    start_date: startDate,
-    end_date: endDate,
-    hours_per_day: Math.round(hoursPerDay * 4) / 4, // round to nearest 0.25
+    start_date: effectiveStartDate,
+    end_date: effectiveEndDate,
+    hours_per_day: hoursPerDay,
     bill_rate: role.bill_rate,
     status: "confirmed",
   })
