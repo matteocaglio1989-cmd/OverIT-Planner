@@ -64,6 +64,8 @@ export function MembersManager({ members: initialMembers }: MembersManagerProps)
       setMessage(result.message ?? "Invitation sent")
       setInviteEmail("")
       setShowInvite(false)
+    } else if (result.error) {
+      setMessage(`Error: ${result.error}`)
     }
   }
 

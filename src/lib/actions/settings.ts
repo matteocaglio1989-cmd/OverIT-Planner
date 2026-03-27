@@ -133,7 +133,95 @@ export async function updateMemberRole(profileId: string, role: "admin" | "manag
 }
 
 export async function inviteMember(email: string, role: "admin" | "manager" | "consultant") {
-  // In a real app, this would send an invitation email via Supabase Auth
-  // For now, return a placeholder
-  return { success: true, message: `Invitation sent to ${email} as ${role}` }
+  const supabase = await createClient()
+
+  // Get current user's org
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Not authenticated" }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("organization_id")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.organization_id) return { error: "No organization found" }
+
+  // Check if user already exists in the org
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("email", email.toLowerCase())
+    .eq("organization_id", profile.organization_id)
+    .single()
+
+  if (existing) {
+    return { error: `${email} is already a member of this organization.` }
+  }
+
+  // Use Supabase Admin API to invite the user
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const adminClient = createAdminClient()
+
+    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+      data: {
+        full_name: email.split("@")[0],
+        invited_role: role,
+        organization_id: profile.organization_id,
+      },
+      redirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? process.env.NEXT_PUBLIC_SUPABASE_URL.replace("supabase.co", "vercel.app") : ""}/auth/callback`,
+    })
+
+    if (inviteError) {
+      // If user already exists in auth but not in org, add them
+      if (inviteError.message?.includes("already been registered") || inviteError.message?.includes("already exists")) {
+        // Look up user by email via admin
+        const { data: listData } = await adminClient.auth.admin.listUsers()
+        const existingUser = listData?.users?.find(
+          (u) => u.email?.toLowerCase() === email.toLowerCase()
+        )
+
+        if (existingUser) {
+          // Create profile in this org
+          await adminClient.from("profiles").upsert({
+            id: existingUser.id,
+            email: email.toLowerCase(),
+            full_name: existingUser.user_metadata?.full_name || email.split("@")[0],
+            organization_id: profile.organization_id,
+            role,
+          })
+
+          revalidatePath("/settings")
+          return { success: true, message: `${email} added to your organization as ${role}.` }
+        }
+
+        return { error: `User ${email} already registered but could not be added. Please contact support.` }
+      }
+
+      return { error: inviteError.message }
+    }
+
+    // Create profile for the invited user
+    if (inviteData?.user) {
+      await adminClient.from("profiles").upsert({
+        id: inviteData.user.id,
+        email: email.toLowerCase(),
+        full_name: email.split("@")[0],
+        organization_id: profile.organization_id,
+        role,
+      })
+    }
+
+    revalidatePath("/settings")
+    return { success: true, message: `Invitation email sent to ${email} as ${role}.` }
+  } catch (err) {
+    // Fallback if SUPABASE_SERVICE_ROLE_KEY is not configured
+    if (err instanceof Error && err.message.includes("SUPABASE_SERVICE_ROLE_KEY")) {
+      return {
+        error: "Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it to your environment variables to enable invitations.",
+      }
+    }
+    return { error: err instanceof Error ? err.message : "Failed to send invitation." }
+  }
 }

@@ -29,6 +29,11 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import {
+  saveHiBobConfig,
+  getHiBobConfig,
+  testHiBobConnection,
+} from "@/lib/actions/integrations"
 
 interface PreviewEmployee {
   hibobId: string
@@ -70,6 +75,7 @@ export function HiBobIntegration() {
   const [serviceUserId, setServiceUserId] = useState("")
   const [connected, setConnected] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [configLoading, setConfigLoading] = useState(true)
 
   // Flow state
   const [step, setStep] = useState<Step>("config")
@@ -86,27 +92,24 @@ export function HiBobIntegration() {
   // Result state
   const [syncLog, setSyncLog] = useState<{ action: string; count: number; status: string }[]>([])
 
-  // Load config on mount
+  // Load config on mount via server action
   useEffect(() => {
     async function loadConfig() {
-      if (!supabase) return
-      const { data: user } = await supabase.auth.getUser()
-      if (!user.user) return
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("organization_id")
-        .eq("id", user.user.id)
-        .single()
-      if (!profile?.organization_id) return
-
-      const saved = localStorage.getItem(`hibob_config_${profile.organization_id}`)
-      if (saved) {
-        const config = JSON.parse(saved)
-        if (config.apiToken) {
-          setApiToken("••••••••")
-          setServiceUserId(config.serviceUserId || "")
-          setConnected(true)
+      try {
+        const result = await getHiBobConfig()
+        if (result && !result.error) {
+          if (result.hasApiToken) {
+            setApiToken("••••••••")
+            setServiceUserId(result.serviceUserId || "")
+            setConnected(true)
+          } else if (result.serviceUserId) {
+            setServiceUserId(result.serviceUserId)
+          }
         }
+      } catch {
+        // Ignore errors on initial load
+      } finally {
+        setConfigLoading(false)
       }
     }
     loadConfig()
@@ -129,18 +132,57 @@ export function HiBobIntegration() {
     e.preventDefault()
     setSaving(true)
     setError(null)
+    setSuccess(null)
     try {
-      const orgId = await getOrgId()
-      const existing = localStorage.getItem(`hibob_config_${orgId}`)
-      const existingConfig = existing ? JSON.parse(existing) : {}
-      const merged = {
-        ...existingConfig,
-        serviceUserId,
-        apiToken: apiToken.includes("••••") ? existingConfig.apiToken : apiToken,
+      // If the token is masked, we need the real token from the DB.
+      // The server action will handle storing the new values.
+      const tokenToSave = apiToken.includes("••••") ? "" : apiToken
+
+      if (!serviceUserId) {
+        setError("Service User ID is required")
+        setSaving(false)
+        return
       }
-      localStorage.setItem(`hibob_config_${orgId}`, JSON.stringify(merged))
+
+      if (!tokenToSave && !connected) {
+        setError("API Token is required")
+        setSaving(false)
+        return
+      }
+
+      // If the user hasn't changed the token (still masked), skip saving token
+      if (tokenToSave) {
+        // Test connection first with the new credentials
+        const testResult = await testHiBobConnection(serviceUserId, tokenToSave)
+        if (testResult.error) {
+          setError(`Connection test failed: ${testResult.error}`)
+          setSaving(false)
+          return
+        }
+
+        const result = await saveHiBobConfig(serviceUserId, tokenToSave)
+        if (result.error) {
+          setError(result.error)
+          setSaving(false)
+          return
+        }
+      } else {
+        // Only update the service user ID - save with empty token means keep existing
+        // We need to save the config with the service user ID update only
+        // Re-fetch existing token from server to test connection
+        const result = await saveHiBobConfig(serviceUserId, "")
+        if (result.error) {
+          setError(result.error)
+          setSaving(false)
+          return
+        }
+      }
+
       setConnected(true)
-      setSuccess("Credentials saved.")
+      setSuccess("Credentials saved and connection verified.")
+      if (tokenToSave) {
+        setApiToken("••••••••")
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save")
     } finally {
@@ -232,15 +274,6 @@ export function HiBobIntegration() {
       const result = await res.json()
       setSyncLog(result.log || [])
 
-      // Update local config
-      const saved = localStorage.getItem(`hibob_config_${orgId}`)
-      if (saved) {
-        const config = JSON.parse(saved)
-        config.lastSync = new Date().toISOString()
-        config.employeeCount = result.employeeCount
-        localStorage.setItem(`hibob_config_${orgId}`, JSON.stringify(config))
-      }
-
       setStep("result")
       router.refresh()
     } catch (err) {
@@ -253,6 +286,25 @@ export function HiBobIntegration() {
   const selectedCount = employees.filter((e) => e.selected).length
   const newCount = employees.filter((e) => e.selected && !e.isDuplicate).length
   const updateCount = employees.filter((e) => e.selected && e.isDuplicate).length
+
+  if (configLoading) {
+    return (
+      <div className="space-y-6 max-w-4xl">
+        <Link
+          href="/integrations"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Integrations
+        </Link>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-sm text-muted-foreground">Loading configuration...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -357,7 +409,7 @@ export function HiBobIntegration() {
         </Card>
       )}
 
-      {/* Step: Preview — select people to import */}
+      {/* Step: Preview -- select people to import */}
       {step === "preview" && (
         <Card>
           <CardHeader>

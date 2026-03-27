@@ -24,12 +24,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    const apiToken = process.env.HIBOB_API_TOKEN
-    const serviceUserId = process.env.HIBOB_SERVICE_USER_ID
+    // Read HiBob credentials from the organizations table
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("hibob_service_user_id, hibob_api_token")
+      .eq("id", organizationId)
+      .single()
+
+    const apiToken = org?.hibob_api_token
+    const serviceUserId = org?.hibob_service_user_id
 
     if (!apiToken || !serviceUserId) {
       return NextResponse.json(
-        { error: "HiBob credentials not configured. Set HIBOB_API_TOKEN and HIBOB_SERVICE_USER_ID environment variables." },
+        { error: "HiBob credentials not configured. Please save your API credentials in the integration settings." },
         { status: 400 }
       )
     }
