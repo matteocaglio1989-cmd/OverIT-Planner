@@ -1,7 +1,6 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function saveHiBobConfig(serviceUserId: string, apiToken: string) {
   const supabase = await createClient()
@@ -15,13 +14,10 @@ export async function saveHiBobConfig(serviceUserId: string, apiToken: string) {
     .single()
 
   if (!profile?.organization_id) return { error: "No organization" }
-  if (profile.role !== "admin" && profile.role !== "owner") {
+  if (profile.role !== "admin" && profile.role !== "manager") {
     return { error: "Only admins can configure integrations" }
   }
 
-  const admin = createAdminClient()
-
-  // If apiToken is empty, only update the service user ID (keep existing token)
   const updateData: Record<string, string> = {
     hibob_service_user_id: serviceUserId,
   }
@@ -29,7 +25,7 @@ export async function saveHiBobConfig(serviceUserId: string, apiToken: string) {
     updateData.hibob_api_token = apiToken
   }
 
-  const { error } = await admin
+  const { error } = await supabase
     .from("organizations")
     .update(updateData)
     .eq("id", profile.organization_id)
@@ -51,9 +47,7 @@ export async function getHiBobConfig() {
 
   if (!profile?.organization_id) return { error: "No organization" }
 
-  const admin = createAdminClient()
-
-  const { data: org, error } = await admin
+  const { data: org, error } = await supabase
     .from("organizations")
     .select("hibob_service_user_id, hibob_api_token")
     .eq("id", profile.organization_id)

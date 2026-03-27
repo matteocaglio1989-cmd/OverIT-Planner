@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { createAdminClient } from "@/lib/supabase/admin"
 
 interface SyncEmployee {
   hibobId: string
@@ -109,8 +108,7 @@ export async function POST(request: Request) {
     }
 
     // Step 4: Sync time-off / absences
-    const admin = createAdminClient()
-    const { data: org } = await admin
+    const { data: org } = await supabase
       .from("organizations")
       .select("hibob_service_user_id, hibob_api_token")
       .eq("id", organizationId)

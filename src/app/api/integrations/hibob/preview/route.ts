@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function POST(request: Request) {
   try {
@@ -25,8 +24,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    const admin = createAdminClient()
-    const { data: org } = await admin
+    // Read HiBob credentials from the organizations table
+    const { data: org } = await supabase
       .from("organizations")
       .select("hibob_service_user_id, hibob_api_token")
       .eq("id", organizationId)
