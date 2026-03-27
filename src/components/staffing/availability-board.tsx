@@ -4,6 +4,8 @@ import * as React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select, SelectOption } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import type { ConsultantWithAllocation } from "@/lib/actions/staffing"
 
@@ -18,6 +20,53 @@ export function AvailabilityBoard({
   onSelect,
   selectedId,
 }: AvailabilityBoardProps) {
+  const [nameFilter, setNameFilter] = React.useState("")
+  const [departmentFilter, setDepartmentFilter] = React.useState("")
+  const [skillFilter, setSkillFilter] = React.useState("")
+
+  // Extract unique departments and skills for filter dropdowns
+  const departments = React.useMemo(() => {
+    const deps = new Set<string>()
+    for (const c of consultants) {
+      if (c.department) deps.add(c.department)
+    }
+    return Array.from(deps).sort()
+  }, [consultants])
+
+  const skills = React.useMemo(() => {
+    const skillSet = new Map<string, string>()
+    for (const c of consultants) {
+      for (const s of c.skills) {
+        skillSet.set(s.id, s.name)
+      }
+    }
+    return Array.from(skillSet.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [consultants])
+
+  // Apply filters
+  const filteredConsultants = React.useMemo(() => {
+    return consultants.filter((c) => {
+      if (
+        nameFilter &&
+        !c.full_name.toLowerCase().includes(nameFilter.toLowerCase())
+      ) {
+        return false
+      }
+      if (departmentFilter && c.department !== departmentFilter) {
+        return false
+      }
+      if (
+        skillFilter &&
+        !c.skills.some((s) => s.id === skillFilter)
+      ) {
+        return false
+      }
+      return true
+    })
+  }, [consultants, nameFilter, departmentFilter, skillFilter])
+
   function getUtilizationColor(pct: number) {
     if (pct > 100) return "bg-red-500"
     if (pct >= 80) return "bg-yellow-500"
@@ -40,7 +89,46 @@ export function AvailabilityBoard({
 
   return (
     <div className="space-y-3">
-      {consultants.map((consultant) => {
+      <div className="space-y-2">
+        <Input
+          placeholder="Search by name..."
+          value={nameFilter}
+          onChange={(e) => setNameFilter(e.target.value)}
+          className="h-8 text-sm"
+        />
+        <div className="flex gap-2">
+          <Select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="h-8 text-sm flex-1"
+          >
+            <SelectOption value="">All departments</SelectOption>
+            {departments.map((dep) => (
+              <SelectOption key={dep} value={dep}>
+                {dep}
+              </SelectOption>
+            ))}
+          </Select>
+          <Select
+            value={skillFilter}
+            onChange={(e) => setSkillFilter(e.target.value)}
+            className="h-8 text-sm flex-1"
+          >
+            <SelectOption value="">All skills</SelectOption>
+            {skills.map((s) => (
+              <SelectOption key={s.id} value={s.id}>
+                {s.name}
+              </SelectOption>
+            ))}
+          </Select>
+        </div>
+      </div>
+      {filteredConsultants.length === 0 ? (
+        <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+          No consultants match the current filters.
+        </div>
+      ) : null}
+      {filteredConsultants.map((consultant) => {
         const weeklyCapacity = consultant.weekly_capacity_hours || 40
         const availableHours = Math.max(
           0,

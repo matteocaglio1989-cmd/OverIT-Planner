@@ -303,6 +303,40 @@ export async function getSkillMatches(roleId: string): Promise<SkillMatch[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Availability for Date Range
+// ---------------------------------------------------------------------------
+
+export async function getAvailabilityForDateRange(
+  profileId: string,
+  startDate: string,
+  endDate: string
+): Promise<{ usedFte: number; availableFte: number }> {
+  const { supabase, organizationId } = await getOrgId()
+
+  // Fetch allocations that overlap with the given date range
+  const { data: allocations, error } = await supabase
+    .from("allocations")
+    .select("hours_per_day")
+    .eq("profile_id", profileId)
+    .eq("organization_id", organizationId)
+    .lte("start_date", endDate)
+    .gte("end_date", startDate)
+
+  if (error) throw error
+
+  const totalHoursPerDay = (allocations ?? []).reduce(
+    (sum, a) => sum + a.hours_per_day,
+    0
+  )
+
+  // 1 FTE = 8 hours/day
+  const usedFte = totalHoursPerDay / 8
+  const availableFte = Math.max(0, 1.0 - usedFte)
+
+  return { usedFte: Math.round(usedFte * 100) / 100, availableFte: Math.round(availableFte * 100) / 100 }
+}
+
+// ---------------------------------------------------------------------------
 // Quick Assign
 // ---------------------------------------------------------------------------
 
@@ -310,7 +344,8 @@ export async function quickAssign(
   profileId: string,
   roleId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  allocationPercentage: number = 100
 ) {
   const { supabase, organizationId } = await getOrgId()
 
@@ -327,9 +362,10 @@ export async function quickAssign(
   const effectiveStartDate = role.start_date || startDate
   const effectiveEndDate = role.end_date || endDate
 
-  // Use FTE to calculate hours_per_day (1 FTE = 8 hours/day)
+  // Use FTE to calculate hours_per_day, scaled by allocation percentage
+  // hours_per_day = role.fte * 8 * (percentage / 100)
   const fteValue = role.fte ?? 1.0
-  const hoursPerDay = fteValue * 8
+  const hoursPerDay = fteValue * 8 * (allocationPercentage / 100)
 
   // Create allocation
   const { error: allocError } = await supabase.from("allocations").insert({
