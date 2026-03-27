@@ -21,12 +21,17 @@ export async function saveHiBobConfig(serviceUserId: string, apiToken: string) {
 
   const admin = createAdminClient()
 
+  // If apiToken is empty, only update the service user ID (keep existing token)
+  const updateData: Record<string, string> = {
+    hibob_service_user_id: serviceUserId,
+  }
+  if (apiToken) {
+    updateData.hibob_api_token = apiToken
+  }
+
   const { error } = await admin
     .from("organizations")
-    .update({
-      hibob_service_user_id: serviceUserId,
-      hibob_api_token: apiToken,
-    })
+    .update(updateData)
     .eq("id", profile.organization_id)
 
   if (error) return { error: error.message }
