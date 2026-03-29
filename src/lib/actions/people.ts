@@ -137,6 +137,73 @@ export async function addProfileSkill(
   revalidatePath(`/people/${profileId}`)
 }
 
+export async function addSkillToProfile(
+  profileId: string,
+  skillName: string
+): Promise<{ skill_id: string; skill_name: string }> {
+  const supabase = await createClient()
+
+  const { data: user } = await supabase.auth.getUser()
+  if (!user.user) throw new Error("Not authenticated")
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("organization_id")
+    .eq("id", user.user.id)
+    .single()
+
+  if (!profile?.organization_id) throw new Error("No organization found")
+
+  const trimmed = skillName.trim()
+  if (!trimmed) throw new Error("Skill name cannot be empty")
+
+  // Check if skill already exists in the org (case-insensitive)
+  const { data: existingSkills } = await supabase
+    .from("skills")
+    .select("id, name")
+    .eq("organization_id", profile.organization_id)
+    .ilike("name", trimmed)
+
+  let skillId: string
+  let finalName: string
+
+  if (existingSkills && existingSkills.length > 0) {
+    skillId = existingSkills[0].id
+    finalName = existingSkills[0].name
+  } else {
+    // Auto-create the skill
+    const { data: newSkill, error: createError } = await supabase
+      .from("skills")
+      .insert({
+        organization_id: profile.organization_id,
+        name: trimmed,
+        category: null,
+      })
+      .select("id, name")
+      .single()
+
+    if (createError || !newSkill) throw createError ?? new Error("Failed to create skill")
+
+    skillId = newSkill.id
+    finalName = newSkill.name
+  }
+
+  // Link skill to profile (default proficiency 3)
+  const { error: linkError } = await supabase.from("profile_skills").upsert({
+    profile_id: profileId,
+    skill_id: skillId,
+    proficiency_level: 3,
+  })
+
+  if (linkError) throw linkError
+
+  revalidatePath("/people")
+  revalidatePath(`/people/${profileId}`)
+  revalidatePath("/settings/skills")
+
+  return { skill_id: skillId, skill_name: finalName }
+}
+
 export async function removeProfileSkill(profileId: string, skillId: string) {
   const supabase = await createClient()
 

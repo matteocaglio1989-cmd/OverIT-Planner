@@ -2,7 +2,6 @@ import { notFound } from "next/navigation"
 import { getProfile } from "@/lib/actions/people"
 import { getSkills } from "@/lib/actions/skills"
 import { ProfileForm } from "@/components/people/profile-form"
-import { SkillTags } from "@/components/people/skill-tags"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 
 export default async function ProfilePage({
@@ -31,10 +30,9 @@ export default async function ProfilePage({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <ProfileForm profile={profile} />
-          <SkillTags
-            profileId={profile.id}
-            profileSkills={profile.skills}
+          <ProfileForm
+            profile={profile}
+            skills={profile.skills}
             allSkills={allSkills}
           />
         </div>
