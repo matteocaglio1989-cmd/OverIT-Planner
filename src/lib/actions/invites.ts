@@ -99,6 +99,7 @@ export async function resendInvite(inviteId: string) {
         invited_role: invite.role,
         organization_id: profile.organization_id,
       },
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/auth/callback`,
     })
 
     if (inviteError) {

@@ -170,7 +170,7 @@ export async function inviteMember(email: string, role: "admin" | "manager" | "c
         invited_role: role,
         organization_id: profile.organization_id,
       },
-      redirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? process.env.NEXT_PUBLIC_SUPABASE_URL.replace("supabase.co", "vercel.app") : ""}/auth/callback`,
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/auth/callback`,
     })
 
     if (inviteError) {
