@@ -88,6 +88,10 @@ export async function resendInvite(inviteId: string) {
 
   if (!invite) return { error: "Invite not found" }
 
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is not set. Add it to Vercel environment variables." }
+  }
+
   // Re-send the invitation via Supabase Admin API
   try {
     const { createAdminClient } = await import("@/lib/supabase/admin")
@@ -103,10 +107,7 @@ export async function resendInvite(inviteId: string) {
     })
 
     if (inviteError) {
-      // If the user already exists, that's okay - the original invite is still valid
-      if (!inviteError.message?.includes("already") ) {
-        return { error: inviteError.message }
-      }
+      return { error: `Failed to send invite: ${inviteError.message}` }
     }
 
     // Update invited_at timestamp
