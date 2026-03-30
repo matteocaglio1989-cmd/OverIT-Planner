@@ -41,6 +41,7 @@ interface TimelineGridProps {
   openRoles?: OpenRoleWithProject[]
   onCellClick: (profileId: string, date: Date) => void
   onAllocationClick: (allocation: Allocation) => void
+  onOpenRoleClick?: (role: OpenRoleWithProject) => void
 }
 
 export function TimelineGrid({
@@ -51,6 +52,7 @@ export function TimelineGrid({
   openRoles = [],
   onCellClick,
   onAllocationClick,
+  onOpenRoleClick,
 }: TimelineGridProps) {
   const { zoom, startDate, endDate } = useTimelineStore()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -263,7 +265,7 @@ export function TimelineGrid({
                   {/* Dashed block showing needed period */}
                   {showBlock && width > 0 && (
                     <div
-                      className="absolute top-2 rounded-md flex items-center px-2 text-xs font-medium truncate"
+                      className="absolute top-2 rounded-md flex items-center px-2 text-xs font-medium truncate cursor-pointer hover:opacity-80 transition-opacity"
                       style={{
                         left: Math.max(left, 0),
                         width: Math.max(width, 40),
@@ -272,7 +274,8 @@ export function TimelineGrid({
                         border: `2px dashed ${role.project?.color || "#f59e0b"}`,
                         color: role.project?.color || "#f59e0b",
                       }}
-                      title={`${role.title} — ${role.project?.name} (unallocated)`}
+                      title={`${role.title} — ${role.project?.name} (click to assign)`}
+                      onClick={() => onOpenRoleClick?.(role)}
                     >
                       <span className="truncate">
                         {role.title} — needs staffing

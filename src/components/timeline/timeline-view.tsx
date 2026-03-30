@@ -9,6 +9,7 @@ import { TimelineSidebar, ROW_HEIGHT } from "@/components/timeline/timeline-side
 import { TimelineGrid } from "@/components/timeline/timeline-grid"
 import { TimelineFilters } from "@/components/timeline/timeline-filters"
 import { AllocationDialog } from "@/components/timeline/allocation-dialog"
+import { RoleAssignDialog } from "@/components/timeline/role-assign-dialog"
 import type {
   Allocation,
   Absence,
@@ -59,6 +60,11 @@ export function TimelineView({
     useState<Allocation | null>(null)
   const [defaultProfileId, setDefaultProfileId] = useState<string>("")
   const [defaultDate, setDefaultDate] = useState<string>("")
+
+  // Role assign dialog state
+  const [roleAssignOpen, setRoleAssignOpen] = useState(false)
+  const [selectedOpenRole, setSelectedOpenRole] =
+    useState<OpenRoleWithProject | null>(null)
 
   // Track whether we've moved away from initial range
   const initialRangeRef = useRef({
@@ -189,6 +195,12 @@ export function TimelineView({
     setDialogOpen(true)
   }, [])
 
+  // Open role click handler
+  const handleOpenRoleClick = useCallback((role: OpenRoleWithProject) => {
+    setSelectedOpenRole(role)
+    setRoleAssignOpen(true)
+  }, [])
+
   // After mutation, refetch
   const handleMutationSuccess = useCallback(() => {
     const startStr = format(startDate, "yyyy-MM-dd")
@@ -238,7 +250,7 @@ export function TimelineView({
           className="overflow-hidden"
           style={{ width: 240, minWidth: 240 }}
         >
-          <TimelineSidebar profiles={filteredProfiles} openRoles={openRoles} />
+          <TimelineSidebar profiles={filteredProfiles} openRoles={openRoles} onOpenRoleClick={handleOpenRoleClick} />
         </div>
 
         {/* Grid */}
@@ -255,6 +267,7 @@ export function TimelineView({
             openRoles={openRoles}
             onCellClick={handleCellClick}
             onAllocationClick={handleAllocationClick}
+            onOpenRoleClick={handleOpenRoleClick}
           />
         </div>
       </div>
@@ -268,6 +281,15 @@ export function TimelineView({
         projects={projects}
         defaultProfileId={defaultProfileId}
         defaultDate={defaultDate}
+        onSuccess={handleMutationSuccess}
+      />
+
+      {/* Role Assign Dialog */}
+      <RoleAssignDialog
+        open={roleAssignOpen}
+        onOpenChange={setRoleAssignOpen}
+        role={selectedOpenRole}
+        profiles={profiles}
         onSuccess={handleMutationSuccess}
       />
     </div>
