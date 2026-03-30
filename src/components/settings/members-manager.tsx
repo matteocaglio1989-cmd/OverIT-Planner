@@ -188,8 +188,8 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
             </TableRow>
           </TableHeader>
           <TableBody>
-            {members.map((member) => (
-              <TableRow key={member.id} className={!member.is_active ? "opacity-50" : undefined}>
+            {members.filter((m) => m.is_active).map((member) => (
+              <TableRow key={member.id}>
                 <TableCell className="font-medium">{member.full_name}</TableCell>
                 <TableCell>{member.email}</TableCell>
                 <TableCell>
