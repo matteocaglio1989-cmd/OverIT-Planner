@@ -179,6 +179,10 @@ export async function reinviteUser(email: string) {
     return { error: "Not authorized" }
   }
 
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is not set. Add it to Vercel environment variables." }
+  }
+
   try {
     const { createAdminClient } = await import("@/lib/supabase/admin")
     const adminClient = createAdminClient()
@@ -191,10 +195,7 @@ export async function reinviteUser(email: string) {
     })
 
     if (inviteError) {
-      // If user already confirmed, that's fine
-      if (!inviteError.message?.includes("already")) {
-        return { error: inviteError.message }
-      }
+      return { error: `Failed to send invite: ${inviteError.message}` }
     }
 
     revalidatePath("/settings")
