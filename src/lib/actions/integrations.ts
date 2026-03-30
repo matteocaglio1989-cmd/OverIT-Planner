@@ -171,6 +171,7 @@ interface PreviewEmployee {
   department: string
   startDate: string
   location: string
+  weeklyCapacityHours: number | null
   isDuplicate: boolean
   hasChanges: boolean
   existingProfileId: string | null
@@ -222,6 +223,8 @@ export async function previewHiBobPeople() {
         "work.department",
         "work.startDate",
         "work.site",
+        "work.weeklyHours",
+        "work.siteId",
       ],
       showInactive: false,
       humanReadable: "REPLACE",
@@ -263,6 +266,8 @@ export async function previewHiBobPeople() {
     const department = (work?.department as string) || (emp["work.department"] as string) || ""
     const startDate = (work?.startDate as string) || (emp["work.startDate"] as string) || ""
     const location = (work?.site as string) || (emp["work.site"] as string) || ""
+    const weeklyHoursRaw = work?.weeklyHours ?? emp["work.weeklyHours"]
+    const weeklyCapacityHours = weeklyHoursRaw != null ? Number(weeklyHoursRaw) : null
 
     const existing = email ? existingByEmail.get(email) : null
     const isDuplicate = !!existing
@@ -281,6 +286,7 @@ export async function previewHiBobPeople() {
       department,
       startDate,
       location,
+      weeklyCapacityHours,
       isDuplicate,
       hasChanges,
       existingProfileId: existing?.id || null,
@@ -313,6 +319,7 @@ interface SyncEmployee {
   department: string
   startDate: string
   location: string
+  weeklyCapacityHours: number | null
   isDuplicate: boolean
   existingProfileId: string | null
 }
@@ -363,15 +370,19 @@ export async function syncHiBobPeople(
   // Step 2: Update existing profiles
   let updated = 0
   for (const emp of selectedEmployees.filter((e) => e.isDuplicate && e.existingProfileId)) {
+    const updateData: Record<string, unknown> = {
+      full_name: emp.fullName,
+      job_title: emp.jobTitle || null,
+      department: emp.department || null,
+      start_date: emp.startDate || null,
+      location: emp.location || null,
+    }
+    if (emp.weeklyCapacityHours != null) {
+      updateData.weekly_capacity_hours = emp.weeklyCapacityHours
+    }
     const { error } = await supabase
       .from("profiles")
-      .update({
-        full_name: emp.fullName,
-        job_title: emp.jobTitle || null,
-        department: emp.department || null,
-        start_date: emp.startDate || null,
-        location: emp.location || null,
-      })
+      .update(updateData)
       .eq("id", emp.existingProfileId!)
     if (!error) updated++
   }
