@@ -26,6 +26,7 @@ import {
   Users,
   AlertTriangle,
   Plus,
+  Search,
 } from "lucide-react"
 import Link from "next/link"
 import {
@@ -85,6 +86,7 @@ export function HiBobIntegration() {
 
   // Preview state
   const [employees, setEmployees] = useState<PreviewEmployee[]>([])
+  const [searchQuery, setSearchQuery] = useState("")
   const [roleDefinitions, setRoleDefinitions] = useState<RoleDefinition[]>([])
   const [missingRoles, setMissingRoles] = useState<string[]>([])
   const [roleMappings, setRoleMappings] = useState<RoleMapping[]>([])
@@ -254,6 +256,15 @@ export function HiBobIntegration() {
     }
   }
 
+  const filteredEmployees = employees.filter((emp) => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      emp.fullName.toLowerCase().includes(query) ||
+      emp.email.toLowerCase().includes(query)
+    )
+  })
+
   const selectedCount = employees.filter((e) => e.selected).length
   const newCount = employees.filter((e) => e.selected && !e.isDuplicate).length
   const updateCount = employees.filter((e) => e.selected && e.isDuplicate).length
@@ -400,6 +411,15 @@ export function HiBobIntegration() {
             </div>
           </CardHeader>
           <CardContent>
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
             <div className="border rounded-lg overflow-auto max-h-[500px]">
               <Table>
                 <TableHeader>
@@ -413,7 +433,9 @@ export function HiBobIntegration() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.map((emp, i) => (
+                  {filteredEmployees.map((emp) => {
+                    const originalIndex = employees.indexOf(emp)
+                    return (
                     <TableRow
                       key={emp.hibobId || emp.email}
                       className={emp.selected ? "" : "opacity-50"}
@@ -422,7 +444,7 @@ export function HiBobIntegration() {
                         <input
                           type="checkbox"
                           checked={emp.selected}
-                          onChange={() => toggleEmployee(i)}
+                          onChange={() => toggleEmployee(originalIndex)}
                           className="rounded border-input"
                         />
                       </TableCell>
@@ -459,7 +481,8 @@ export function HiBobIntegration() {
                         )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>

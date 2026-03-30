@@ -132,6 +132,78 @@ export async function updateMemberRole(profileId: string, role: "admin" | "manag
   return { success: true }
 }
 
+export async function deactivateUser(profileId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Not authenticated" }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("organization_id, role")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.organization_id || profile.role !== "admin") {
+    return { error: "Not authorized" }
+  }
+
+  // Prevent self-deactivation
+  if (profileId === user.id) {
+    return { error: "You cannot deactivate yourself." }
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ is_active: false })
+    .eq("id", profileId)
+
+  if (error) return { error: error.message }
+
+  revalidatePath("/settings")
+  revalidatePath("/people")
+  return { success: true }
+}
+
+export async function reinviteUser(email: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Not authenticated" }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("organization_id, role")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.organization_id || profile.role !== "admin") {
+    return { error: "Not authorized" }
+  }
+
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const adminClient = createAdminClient()
+
+    const { error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+      data: {
+        organization_id: profile.organization_id,
+      },
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/auth/callback`,
+    })
+
+    if (inviteError) {
+      // If user already confirmed, that's fine
+      if (!inviteError.message?.includes("already")) {
+        return { error: inviteError.message }
+      }
+    }
+
+    revalidatePath("/settings")
+    return { success: true, message: `Reinvite email sent to ${email}.` }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to send reinvite." }
+  }
+}
+
 export async function inviteMember(email: string, role: "admin" | "manager" | "consultant") {
   const supabase = await createClient()
 

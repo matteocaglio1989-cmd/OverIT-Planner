@@ -15,9 +15,17 @@ import {
   TableRow,
   TableCell,
 } from "@/components/ui/table"
-import { updateMemberRole, inviteMember } from "@/lib/actions/settings"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import { updateMemberRole, inviteMember, deactivateUser, reinviteUser } from "@/lib/actions/settings"
 import { PendingInvites } from "@/components/settings/pending-invites"
-import { UserPlus } from "lucide-react"
+import { UserPlus, RotateCw, Trash2 } from "lucide-react"
 import type { UserRole, PendingInvite } from "@/lib/types/database"
 
 interface Member {
@@ -46,6 +54,8 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
   const [inviteRole, setInviteRole] = useState<UserRole>("consultant")
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Member | null>(null)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   async function handleRoleChange(profileId: string, newRole: UserRole) {
     await updateMemberRole(profileId, newRole)
@@ -71,8 +81,55 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
     }
   }
 
+  async function handleReinvite(member: Member) {
+    setActionLoading(member.id)
+    setMessage(null)
+    const result = await reinviteUser(member.email)
+    setActionLoading(null)
+    if (result.success) {
+      setMessage(result.message ?? `Reinvite sent to ${member.email}`)
+    } else if (result.error) {
+      setMessage(`Error: ${result.error}`)
+    }
+  }
+
+  async function handleDeactivate() {
+    if (!deleteTarget) return
+    setActionLoading(deleteTarget.id)
+    setMessage(null)
+    const result = await deactivateUser(deleteTarget.id)
+    setActionLoading(null)
+    setDeleteTarget(null)
+    if (result.success) {
+      setMembers(members.map((m) =>
+        m.id === deleteTarget.id ? { ...m, is_active: false } : m
+      ))
+      setMessage(`${deleteTarget.full_name} has been deactivated.`)
+    } else if (result.error) {
+      setMessage(`Error: ${result.error}`)
+    }
+  }
+
   return (
     <>
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Deactivate {deleteTarget?.full_name}?</DialogTitle>
+            <DialogDescription>
+              Are you sure? This will deactivate the user but keep their project staffing data.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleDeactivate} disabled={actionLoading === deleteTarget?.id}>
+              {actionLoading === deleteTarget?.id ? "Deactivating..." : "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <PendingInvites invites={pendingInvites} />
       <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -127,11 +184,12 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Change Role</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {members.map((member) => (
-              <TableRow key={member.id}>
+              <TableRow key={member.id} className={!member.is_active ? "opacity-50" : undefined}>
                 <TableCell className="font-medium">{member.full_name}</TableCell>
                 <TableCell>{member.email}</TableCell>
                 <TableCell>
@@ -140,20 +198,47 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={member.is_active ? "default" : "secondary"}>
-                    {member.is_active ? "Active" : "Inactive"}
-                  </Badge>
+                  {member.is_active ? (
+                    <Badge variant="default">Active</Badge>
+                  ) : (
+                    <Badge variant="secondary">Deactivated</Badge>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Select
                     value={member.role}
                     onChange={(e) => handleRoleChange(member.id, e.target.value as UserRole)}
                     className="w-32"
+                    disabled={!member.is_active}
                   >
                     <SelectOption value="consultant">Consultant</SelectOption>
                     <SelectOption value="manager">Manager</SelectOption>
                     <SelectOption value="admin">Admin</SelectOption>
                   </Select>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleReinvite(member)}
+                      disabled={actionLoading === member.id}
+                    >
+                      <RotateCw className="h-4 w-4 mr-1" />
+                      Reinvite
+                    </Button>
+                    {member.is_active && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setDeleteTarget(member)}
+                        disabled={actionLoading === member.id}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
