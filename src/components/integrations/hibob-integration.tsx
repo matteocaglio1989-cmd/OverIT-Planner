@@ -28,11 +28,12 @@ import {
   Plus,
 } from "lucide-react"
 import Link from "next/link"
-import { createClient } from "@/lib/supabase/client"
 import {
   saveHiBobConfig,
   getHiBobConfig,
   testHiBobConnection,
+  previewHiBobPeople,
+  syncHiBobPeople,
 } from "@/lib/actions/integrations"
 
 interface PreviewEmployee {
@@ -68,7 +69,6 @@ type Step = "config" | "preview" | "roles" | "confirm" | "result"
 
 export function HiBobIntegration() {
   const router = useRouter()
-  const supabase = createClient()
 
   // Config state
   const [apiToken, setApiToken] = useState("")
@@ -114,19 +114,6 @@ export function HiBobIntegration() {
     }
     loadConfig()
   }, [])
-
-  async function getOrgId(): Promise<string> {
-    if (!supabase) throw new Error("Not connected")
-    const { data: user } = await supabase.auth.getUser()
-    if (!user.user) throw new Error("Not authenticated")
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("organization_id")
-      .eq("id", user.user.id)
-      .single()
-    if (!profile?.organization_id) throw new Error("No organization")
-    return profile.organization_id
-  }
 
   async function handleSaveConfig(e: React.FormEvent) {
     e.preventDefault()
@@ -190,29 +177,22 @@ export function HiBobIntegration() {
     }
   }
 
-  // Step 1: Fetch preview
+  // Step 1: Fetch preview via server action
   async function handleFetchPreview() {
     setLoading(true)
     setError(null)
     try {
-      const orgId = await getOrgId()
-      const res = await fetch("/api/integrations/hibob/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId: orgId }),
-      })
-      if (!res.ok) {
-        const body = await res.json()
-        throw new Error(body.error || "Preview failed")
+      const data = await previewHiBobPeople()
+      if (data.error) {
+        throw new Error(data.error)
       }
-      const data = await res.json()
-      setEmployees(data.employees)
-      setMissingRoles(data.missingRoles)
-      setRoleDefinitions(data.roleDefinitions)
+      setEmployees(data.employees || [])
+      setMissingRoles(data.missingRoles || [])
+      setRoleDefinitions(data.roleDefinitions || [])
 
       // Initialize role mappings for missing roles
       setRoleMappings(
-        data.missingRoles.map((title: string) => ({
+        (data.missingRoles || []).map((title: string) => ({
           hibobTitle: title,
           appRoleId: null,
           appRoleName: title,
@@ -247,31 +227,22 @@ export function HiBobIntegration() {
     )
   }
 
-  // Step 3: Confirm & sync
+  // Step 3: Confirm & sync via server action
   async function handleSync() {
     setLoading(true)
     setError(null)
     try {
-      const orgId = await getOrgId()
       const selected = employees.filter((e) => e.selected)
 
-      const res = await fetch("/api/integrations/hibob/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          organizationId: orgId,
-          selectedEmployees: selected,
-          roleMappings: roleMappings.filter((m) => m.createNew),
-          createMissingRoles: true,
-        }),
-      })
+      const result = await syncHiBobPeople(
+        selected,
+        roleMappings.filter((m) => m.createNew),
+        true
+      )
 
-      if (!res.ok) {
-        const body = await res.json()
-        throw new Error(body.error || "Sync failed")
+      if (result.error) {
+        throw new Error(result.error)
       }
-
-      const result = await res.json()
       setSyncLog(result.log || [])
 
       setStep("result")
