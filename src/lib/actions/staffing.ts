@@ -24,6 +24,66 @@ async function getOrgId() {
   return { supabase, organizationId: profile.organization_id }
 }
 
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>
+
+/**
+ * Calculate the total allocated FTE for a given project role by summing
+ * all allocations' hours_per_day / 8.
+ */
+export async function calculateAllocatedFte(
+  roleId: string,
+  supabaseClient?: SupabaseClient
+): Promise<number> {
+  const client = supabaseClient ?? (await createClient())
+
+  const { data: allocations, error } = await client
+    .from("allocations")
+    .select("hours_per_day")
+    .eq("project_role_id", roleId)
+
+  if (error) throw error
+
+  const totalHoursPerDay = (allocations ?? []).reduce(
+    (sum, a) => sum + a.hours_per_day,
+    0
+  )
+
+  return Math.round((totalHoursPerDay / 8) * 100) / 100
+}
+
+/**
+ * Recalculate whether a role is filled based on the sum of its allocations
+ * vs the role's FTE requirement.
+ */
+export async function recalculateRoleFilled(
+  roleId: string,
+  supabaseClient?: SupabaseClient
+): Promise<{ allocatedFte: number; isFilled: boolean }> {
+  const client = supabaseClient ?? (await createClient())
+
+  const allocatedFte = await calculateAllocatedFte(roleId, client)
+
+  // Get the role's required FTE
+  const { data: role, error } = await client
+    .from("project_roles")
+    .select("fte")
+    .eq("id", roleId)
+    .single()
+
+  if (error || !role) throw error ?? new Error("Role not found")
+
+  const requiredFte = role.fte ?? 1.0
+  const isFilled = allocatedFte >= requiredFte
+
+  // Update the role's is_filled status (don't touch assigned_profile_id since multiple people can fill one role)
+  await client
+    .from("project_roles")
+    .update({ is_filled: isFilled })
+    .eq("id", roleId)
+
+  return { allocatedFte, isFilled }
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -36,6 +96,8 @@ export interface ConsultantWithAllocation extends Profile {
 
 export interface OpenRoleWithProject extends ProjectRole {
   project: Pick<Project, "id" | "name" | "status" | "start_date" | "end_date" | "color">
+  allocated_fte: number
+  remaining_fte: number
 }
 
 export interface SkillMatch {
@@ -137,7 +199,7 @@ export async function getAvailableConsultants(): Promise<ConsultantWithAllocatio
 export async function getOpenRoles(): Promise<OpenRoleWithProject[]> {
   const { supabase, organizationId } = await getOrgId()
 
-  // Fetch projects for the org first, then get unfilled roles
+  // Fetch projects for the org first, then get roles
   const { data: projects, error: projError } = await supabase
     .from("projects")
     .select("id, name, status, start_date, end_date, color")
@@ -149,21 +211,54 @@ export async function getOpenRoles(): Promise<OpenRoleWithProject[]> {
 
   const projectIds = projects.map((p) => p.id)
 
+  // Fetch ALL roles (not just is_filled=false) so we can check partial fills
   const { data: roles, error: rolesError } = await supabase
     .from("project_roles")
     .select("*")
     .in("project_id", projectIds)
-    .eq("is_filled", false)
     .order("title")
 
   if (rolesError) throw rolesError
+  if (!roles || roles.length === 0) return []
+
+  // Fetch all allocations linked to these roles to calculate allocated FTE
+  const roleIds = roles.map((r) => r.id)
+  const { data: allocations, error: allocError } = await supabase
+    .from("allocations")
+    .select("project_role_id, hours_per_day")
+    .in("project_role_id", roleIds)
+
+  if (allocError) throw allocError
+
+  // Build a map of role_id -> total allocated hours_per_day
+  const roleAllocMap = new Map<string, number>()
+  for (const alloc of allocations ?? []) {
+    if (!alloc.project_role_id) continue
+    const current = roleAllocMap.get(alloc.project_role_id) ?? 0
+    roleAllocMap.set(alloc.project_role_id, current + alloc.hours_per_day)
+  }
 
   const projectMap = new Map(projects.map((p) => [p.id, p]))
 
-  return (roles ?? []).map((role) => ({
-    ...role,
-    project: projectMap.get(role.project_id)!,
-  })) as OpenRoleWithProject[]
+  // Filter to roles where allocated FTE < required FTE
+  const openRoles: OpenRoleWithProject[] = []
+  for (const role of roles) {
+    const totalHoursPerDay = roleAllocMap.get(role.id) ?? 0
+    const allocatedFte = Math.round((totalHoursPerDay / 8) * 100) / 100
+    const requiredFte = role.fte ?? 1.0
+    const remainingFte = Math.round(Math.max(0, requiredFte - allocatedFte) * 100) / 100
+
+    if (remainingFte > 0) {
+      openRoles.push({
+        ...role,
+        project: projectMap.get(role.project_id)!,
+        allocated_fte: allocatedFte,
+        remaining_fte: remainingFte,
+      } as OpenRoleWithProject)
+    }
+  }
+
+  return openRoles
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +398,83 @@ export async function getSkillMatches(roleId: string): Promise<SkillMatch[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Availability for Date Range
+// ---------------------------------------------------------------------------
+
+export async function getAvailabilityForDateRange(
+  profileId: string,
+  startDate: string,
+  endDate: string
+): Promise<{ usedFte: number; availableFte: number }> {
+  const { supabase, organizationId } = await getOrgId()
+
+  // Fetch allocations that overlap with the given date range
+  const { data: allocations, error } = await supabase
+    .from("allocations")
+    .select("hours_per_day")
+    .eq("profile_id", profileId)
+    .eq("organization_id", organizationId)
+    .lte("start_date", endDate)
+    .gte("end_date", startDate)
+
+  if (error) throw error
+
+  const totalHoursPerDay = (allocations ?? []).reduce(
+    (sum, a) => sum + a.hours_per_day,
+    0
+  )
+
+  // 1 FTE = 8 hours/day
+  const usedFte = totalHoursPerDay / 8
+  const availableFte = Math.max(0, 1.0 - usedFte)
+
+  return { usedFte: Math.round(usedFte * 100) / 100, availableFte: Math.round(availableFte * 100) / 100 }
+}
+
+/**
+ * Batch version: fetch availability for multiple profiles in a single query.
+ */
+export async function getBatchAvailabilityForDateRange(
+  profileIds: string[],
+  startDate: string,
+  endDate: string
+): Promise<Record<string, { usedFte: number; availableFte: number }>> {
+  if (profileIds.length === 0) return {}
+
+  const { supabase, organizationId } = await getOrgId()
+
+  const { data: allocations, error } = await supabase
+    .from("allocations")
+    .select("profile_id, hours_per_day")
+    .in("profile_id", profileIds)
+    .eq("organization_id", organizationId)
+    .lte("start_date", endDate)
+    .gte("end_date", startDate)
+
+  if (error) throw error
+
+  // Build per-profile totals
+  const hoursMap = new Map<string, number>()
+  for (const alloc of allocations ?? []) {
+    const current = hoursMap.get(alloc.profile_id) ?? 0
+    hoursMap.set(alloc.profile_id, current + alloc.hours_per_day)
+  }
+
+  const result: Record<string, { usedFte: number; availableFte: number }> = {}
+  for (const id of profileIds) {
+    const totalHoursPerDay = hoursMap.get(id) ?? 0
+    const usedFte = totalHoursPerDay / 8
+    const availableFte = Math.max(0, 1.0 - usedFte)
+    result[id] = {
+      usedFte: Math.round(usedFte * 100) / 100,
+      availableFte: Math.round(availableFte * 100) / 100,
+    }
+  }
+
+  return result
+}
+
+// ---------------------------------------------------------------------------
 // Quick Assign
 // ---------------------------------------------------------------------------
 
@@ -310,7 +482,8 @@ export async function quickAssign(
   profileId: string,
   roleId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  allocationPercentage: number = 100
 ) {
   const { supabase, organizationId } = await getOrgId()
 
@@ -323,14 +496,14 @@ export async function quickAssign(
 
   if (roleError || !role) throw roleError ?? new Error("Role not found")
 
-  // Calculate hours_per_day from estimated_hours and date range
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-  const diffDays = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)))
-  const workDays = Math.ceil(diffDays * (5 / 7))
-  const hoursPerDay = role.estimated_hours
-    ? Math.min(8, role.estimated_hours / Math.max(1, workDays))
-    : 8
+  // Use role-specific dates if available, otherwise use provided dates
+  const effectiveStartDate = role.start_date || startDate
+  const effectiveEndDate = role.end_date || endDate
+
+  // Use FTE to calculate hours_per_day, scaled by allocation percentage
+  // hours_per_day = role.fte * 8 * (percentage / 100)
+  const fteValue = role.fte ?? 1.0
+  const hoursPerDay = fteValue * 8 * (allocationPercentage / 100)
 
   // Create allocation
   const { error: allocError } = await supabase.from("allocations").insert({
@@ -338,25 +511,17 @@ export async function quickAssign(
     project_id: role.project_id,
     profile_id: profileId,
     project_role_id: roleId,
-    start_date: startDate,
-    end_date: endDate,
-    hours_per_day: Math.round(hoursPerDay * 4) / 4, // round to nearest 0.25
+    start_date: effectiveStartDate,
+    end_date: effectiveEndDate,
+    hours_per_day: hoursPerDay,
     bill_rate: role.bill_rate,
     status: "confirmed",
   })
 
   if (allocError) throw allocError
 
-  // Mark role as filled
-  const { error: roleUpdateError } = await supabase
-    .from("project_roles")
-    .update({
-      is_filled: true,
-      assigned_profile_id: profileId,
-    })
-    .eq("id", roleId)
-
-  if (roleUpdateError) throw roleUpdateError
+  // Recalculate whether the role is now fully filled
+  await recalculateRoleFilled(roleId, supabase)
 
   revalidatePath("/staffing")
   revalidatePath("/timeline")

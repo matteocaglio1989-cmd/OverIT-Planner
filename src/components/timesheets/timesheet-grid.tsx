@@ -52,6 +52,7 @@ interface TimesheetGridProps {
   planned: PlannedAllocation[]
   period: TimesheetPeriod | null
   availableProjects: AvailableProject[]
+  weeklyCapacityHours?: number
   onRefresh?: () => void
 }
 
@@ -138,8 +139,10 @@ export function TimesheetGrid({
   planned,
   period,
   availableProjects,
+  weeklyCapacityHours,
   onRefresh,
 }: TimesheetGridProps) {
+  const dailyTargetHours = (weeklyCapacityHours ?? 40) / 5
   const days = React.useMemo(
     () =>
       eachDayOfInterval({
@@ -390,9 +393,22 @@ export function TimesheetGrid({
                 <td className="px-3 py-2">Daily Total</td>
                 {days.map((day) => {
                   const ds = format(day, "yyyy-MM-dd")
+                  const total = dailyTotals[ds] ?? 0
+                  const target = isWeekend(day) ? 0 : dailyTargetHours
+                  const isOver = total > target && target > 0
+                  const isUnder = total > 0 && total < target
                   return (
-                    <td key={ds} className="px-2 py-2 text-center">
-                      {dailyTotals[ds] > 0 ? dailyTotals[ds] : ""}
+                    <td
+                      key={ds}
+                      className={cn(
+                        "px-2 py-2 text-center",
+                        isOver && "text-red-600 dark:text-red-400",
+                        isUnder && "text-amber-600 dark:text-amber-400"
+                      )}
+                    >
+                      {total > 0 || target > 0
+                        ? `${total} / ${target}h`
+                        : ""}
                     </td>
                   )
                 })}

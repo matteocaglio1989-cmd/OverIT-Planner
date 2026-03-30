@@ -7,6 +7,17 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { OpenRoleWithProject } from "@/lib/actions/staffing"
 
+function formatRoleDates(startDate: string | null, endDate: string | null): string {
+  const fmt = (d: string) => {
+    const date = new Date(d + "T00:00:00")
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  }
+  if (startDate && endDate) return `${fmt(startDate)} \u2014 ${fmt(endDate)}`
+  if (startDate) return fmt(startDate)
+  if (endDate) return `\u2014 ${fmt(endDate)}`
+  return ""
+}
+
 interface OpenRolesProps {
   roles: OpenRoleWithProject[]
   onMatch?: (roleId: string) => void
@@ -61,11 +72,19 @@ export function OpenRoles({
                   </div>
                 )}
                 <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
-                  {role.estimated_hours != null && (
-                    <span>{role.estimated_hours}h estimated</span>
+                  {role.fte != null && (
+                    <span>
+                      {role.remaining_fte} / {role.fte} FTE remaining
+                      {role.allocated_fte > 0 && ` (${role.allocated_fte} allocated)`}
+                    </span>
                   )}
                   {role.bill_rate != null && (
                     <span>${role.bill_rate}/hr</span>
+                  )}
+                  {(role.start_date || role.end_date) && (
+                    <span>
+                      {formatRoleDates(role.start_date, role.end_date)}
+                    </span>
                   )}
                 </div>
               </div>

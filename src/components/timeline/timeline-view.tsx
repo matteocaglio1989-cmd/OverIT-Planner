@@ -9,6 +9,7 @@ import { TimelineSidebar, ROW_HEIGHT } from "@/components/timeline/timeline-side
 import { TimelineGrid } from "@/components/timeline/timeline-grid"
 import { TimelineFilters } from "@/components/timeline/timeline-filters"
 import { AllocationDialog } from "@/components/timeline/allocation-dialog"
+import { RoleAssignDialog } from "@/components/timeline/role-assign-dialog"
 import type {
   Allocation,
   Absence,
@@ -21,6 +22,8 @@ import type {
 
 export interface OpenRoleWithProject extends ProjectRole {
   project: Pick<Project, "id" | "name" | "status" | "start_date" | "end_date" | "color">
+  allocated_fte: number
+  remaining_fte: number
 }
 
 interface TimelineViewProps {
@@ -28,6 +31,7 @@ interface TimelineViewProps {
   initialAllocations: (Allocation & {
     project?: { name: string; color: string; id: string } | null
     profile?: Profile | null
+    project_role?: { title: string } | null
   })[]
   initialAbsences: Absence[]
   initialHolidays: PublicHoliday[]
@@ -60,6 +64,11 @@ export function TimelineView({
   const [defaultProfileId, setDefaultProfileId] = useState<string>("")
   const [defaultDate, setDefaultDate] = useState<string>("")
 
+  // Role assign dialog state
+  const [roleAssignOpen, setRoleAssignOpen] = useState(false)
+  const [selectedOpenRole, setSelectedOpenRole] =
+    useState<OpenRoleWithProject | null>(null)
+
   // Track whether we've moved away from initial range
   const initialRangeRef = useRef({
     start: format(startDate, "yyyy-MM-dd"),
@@ -89,7 +98,7 @@ export function TimelineView({
         const [allocResult, absResult, holResult] = await Promise.all([
           supabase
             .from("allocations")
-            .select("*, project:projects(*), profile:profiles(*)")
+            .select("*, project:projects(*), profile:profiles(*), project_role:project_roles(title)")
             .lte("start_date", endStr)
             .gte("end_date", startStr)
             .order("start_date"),
@@ -189,6 +198,12 @@ export function TimelineView({
     setDialogOpen(true)
   }, [])
 
+  // Open role click handler
+  const handleOpenRoleClick = useCallback((role: OpenRoleWithProject) => {
+    setSelectedOpenRole(role)
+    setRoleAssignOpen(true)
+  }, [])
+
   // After mutation, refetch
   const handleMutationSuccess = useCallback(() => {
     const startStr = format(startDate, "yyyy-MM-dd")
@@ -201,18 +216,52 @@ export function TimelineView({
       const [allocResult, rolesResult] = await Promise.all([
         supabase
           .from("allocations")
-          .select("*, project:projects(*), profile:profiles(*)")
+          .select("*, project:projects(*), profile:profiles(*), project_role:project_roles(title)")
           .lte("start_date", endStr)
           .gte("end_date", startStr)
           .order("start_date"),
         supabase
           .from("project_roles")
-          .select("*, project:projects(id, name, status, start_date, end_date, color)")
-          .eq("is_filled", false),
+          .select("*, project:projects(id, name, status, start_date, end_date, color)"),
       ])
 
       if (allocResult.data) setAllocations(allocResult.data as typeof allocations)
-      if (rolesResult.data) setOpenRoles(rolesResult.data as OpenRoleWithProject[])
+      if (rolesResult.data && allocResult.data) {
+        // Calculate allocated FTE per role from allocations
+        const roleAllocMap = new Map<string, number>()
+        for (const alloc of allocResult.data) {
+          if (!alloc.project_role_id) continue
+          const current = roleAllocMap.get(alloc.project_role_id) ?? 0
+          roleAllocMap.set(alloc.project_role_id, current + alloc.hours_per_day)
+        }
+        // Also need all allocations (not just visible ones) for role FTE calc
+        const { data: allAllocs } = await supabase
+          .from("allocations")
+          .select("project_role_id, hours_per_day")
+          .not("project_role_id", "is", null)
+        const fullRoleAllocMap = new Map<string, number>()
+        for (const alloc of allAllocs ?? []) {
+          if (!alloc.project_role_id) continue
+          const current = fullRoleAllocMap.get(alloc.project_role_id) ?? 0
+          fullRoleAllocMap.set(alloc.project_role_id, current + alloc.hours_per_day)
+        }
+
+        const openRolesData: OpenRoleWithProject[] = []
+        for (const role of rolesResult.data) {
+          const totalHpd = fullRoleAllocMap.get(role.id) ?? 0
+          const allocatedFte = Math.round((totalHpd / 8) * 100) / 100
+          const requiredFte = role.fte ?? 1.0
+          const remainingFte = Math.round(Math.max(0, requiredFte - allocatedFte) * 100) / 100
+          if (remainingFte > 0) {
+            openRolesData.push({
+              ...role,
+              allocated_fte: allocatedFte,
+              remaining_fte: remainingFte,
+            } as OpenRoleWithProject)
+          }
+        }
+        setOpenRoles(openRolesData)
+      }
     }
 
     refetch()
@@ -238,7 +287,7 @@ export function TimelineView({
           className="overflow-hidden"
           style={{ width: 240, minWidth: 240 }}
         >
-          <TimelineSidebar profiles={filteredProfiles} openRoles={openRoles} />
+          <TimelineSidebar profiles={filteredProfiles} openRoles={openRoles} onOpenRoleClick={handleOpenRoleClick} />
         </div>
 
         {/* Grid */}
@@ -255,6 +304,7 @@ export function TimelineView({
             openRoles={openRoles}
             onCellClick={handleCellClick}
             onAllocationClick={handleAllocationClick}
+            onOpenRoleClick={handleOpenRoleClick}
           />
         </div>
       </div>
@@ -268,6 +318,15 @@ export function TimelineView({
         projects={projects}
         defaultProfileId={defaultProfileId}
         defaultDate={defaultDate}
+        onSuccess={handleMutationSuccess}
+      />
+
+      {/* Role Assign Dialog */}
+      <RoleAssignDialog
+        open={roleAssignOpen}
+        onOpenChange={setRoleAssignOpen}
+        role={selectedOpenRole}
+        profiles={profiles}
         onSuccess={handleMutationSuccess}
       />
     </div>

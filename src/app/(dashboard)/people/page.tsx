@@ -1,9 +1,14 @@
 import { getProfiles } from "@/lib/actions/people"
+import { getPendingInvites } from "@/lib/actions/invites"
 import { PeopleTable } from "@/components/people/people-table"
+import { PendingInvites } from "@/components/settings/pending-invites"
 import { Button } from "@/components/ui/button"
 
 export default async function PeoplePage() {
-  const profiles = await getProfiles()
+  const [profiles, pendingInvites] = await Promise.all([
+    getProfiles(),
+    getPendingInvites(),
+  ])
 
   return (
     <div className="space-y-6">
@@ -16,6 +21,10 @@ export default async function PeoplePage() {
         </div>
         <Button disabled>Invite</Button>
       </div>
+
+      {pendingInvites.length > 0 && (
+        <PendingInvites invites={pendingInvites} />
+      )}
 
       <PeopleTable profiles={profiles} />
     </div>

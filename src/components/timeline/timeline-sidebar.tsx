@@ -9,9 +9,10 @@ const ROW_HEIGHT = 48
 interface TimelineSidebarProps {
   profiles: Profile[]
   openRoles?: OpenRoleWithProject[]
+  onOpenRoleClick?: (role: OpenRoleWithProject) => void
 }
 
-export function TimelineSidebar({ profiles, openRoles = [] }: TimelineSidebarProps) {
+export function TimelineSidebar({ profiles, openRoles = [], onOpenRoleClick }: TimelineSidebarProps) {
   return (
     <div className="w-[240px] min-w-[240px] border-r bg-background flex flex-col">
       {/* People list */}
@@ -65,8 +66,9 @@ export function TimelineSidebar({ profiles, openRoles = [] }: TimelineSidebarPro
             {openRoles.map((role) => (
               <div
                 key={role.id}
-                className="flex items-center gap-2 px-3 border-b bg-amber-50/30 dark:bg-amber-950/10 hover:bg-amber-50/60"
+                className="flex items-center gap-2 px-3 border-b bg-amber-50/30 dark:bg-amber-950/10 hover:bg-amber-50/60 cursor-pointer"
                 style={{ height: ROW_HEIGHT }}
+                onClick={() => onOpenRoleClick?.(role)}
               >
                 <div
                   className="h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium text-white shrink-0 border-2 border-dashed border-amber-400"
@@ -76,7 +78,7 @@ export function TimelineSidebar({ profiles, openRoles = [] }: TimelineSidebarPro
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium truncate">
-                    {role.title}
+                    {role.title} — {role.remaining_fte} FTE remaining
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
                     {role.project?.name || "Unknown project"}

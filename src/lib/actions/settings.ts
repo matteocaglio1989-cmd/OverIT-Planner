@@ -170,7 +170,7 @@ export async function inviteMember(email: string, role: "admin" | "manager" | "c
         invited_role: role,
         organization_id: profile.organization_id,
       },
-      redirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL ? process.env.NEXT_PUBLIC_SUPABASE_URL.replace("supabase.co", "vercel.app") : ""}/auth/callback`,
+      redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/auth/callback`,
     })
 
     if (inviteError) {
@@ -213,7 +213,17 @@ export async function inviteMember(email: string, role: "admin" | "manager" | "c
       })
     }
 
+    // Record the pending invite
+    await supabase.from("pending_invites").insert({
+      organization_id: profile.organization_id,
+      email: email.toLowerCase(),
+      role,
+      invited_by: user.id,
+      status: "pending",
+    })
+
     revalidatePath("/settings")
+    revalidatePath("/people")
     return { success: true, message: `Invitation email sent to ${email} as ${role}.` }
   } catch (err) {
     // Fallback if SUPABASE_SERVICE_ROLE_KEY is not configured

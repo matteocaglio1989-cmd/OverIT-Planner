@@ -35,12 +35,14 @@ interface TimelineGridProps {
   allocations: (Allocation & {
     project?: { name: string; color: string; id: string } | null
     profile?: Profile | null
+    project_role?: { title: string } | null
   })[]
   absences: Absence[]
   holidays: PublicHoliday[]
   openRoles?: OpenRoleWithProject[]
   onCellClick: (profileId: string, date: Date) => void
   onAllocationClick: (allocation: Allocation) => void
+  onOpenRoleClick?: (role: OpenRoleWithProject) => void
 }
 
 export function TimelineGrid({
@@ -51,6 +53,7 @@ export function TimelineGrid({
   openRoles = [],
   onCellClick,
   onAllocationClick,
+  onOpenRoleClick,
 }: TimelineGridProps) {
   const { zoom, startDate, endDate } = useTimelineStore()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -135,7 +138,7 @@ export function TimelineGrid({
     return map
   }, [profiles, profileAllocations, startDate, endDate])
 
-  // Calculate pixel position for a date
+  // Calculate pixel position for a date, snapping to column boundaries
   const getPosition = useCallback(
     (date: Date): number => {
       if (zoom === "day") {
@@ -145,17 +148,36 @@ export function TimelineGrid({
       if (zoom === "week") {
         const weekStart = startOfWeek(startDate, { weekStartsOn: 1 })
         const diffDays = differenceInDays(date, weekStart)
-        return (diffDays / 7) * colWidth
+        // Snap to the week column boundary
+        return Math.floor(diffDays / 7) * colWidth
       }
-      // month
+      // month — snap to month column boundary
       const monthStart = startOfMonth(startDate)
-      const diffDays = differenceInDays(date, monthStart)
-      const totalDaysInView = differenceInDays(endDate, monthStart) || 1
-      const totalMonths =
-        differenceInMonths(endDate, monthStart) + 1 || 1
-      return (diffDays / (totalDaysInView / totalMonths)) * colWidth
+      const diffMonths = differenceInMonths(date, monthStart)
+      return diffMonths * colWidth
     },
-    [zoom, startDate, endDate, colWidth]
+    [zoom, startDate, colWidth]
+  )
+
+  // Calculate the right edge (end) position for a date, snapping to column end
+  const getEndPosition = useCallback(
+    (date: Date): number => {
+      if (zoom === "day") {
+        const diff = differenceInDays(date, startDate)
+        return (diff + 1) * colWidth
+      }
+      if (zoom === "week") {
+        const weekStart = startOfWeek(startDate, { weekStartsOn: 1 })
+        const diffDays = differenceInDays(date, weekStart)
+        // Snap to the end of the week column
+        return (Math.floor(diffDays / 7) + 1) * colWidth
+      }
+      // month — snap to end of month column
+      const monthStart = startOfMonth(startDate)
+      const diffMonths = differenceInMonths(date, monthStart)
+      return (diffMonths + 1) * colWidth
+    },
+    [zoom, startDate, colWidth]
   )
 
   return (
@@ -182,6 +204,7 @@ export function TimelineGrid({
               startDate={startDate}
               endDate={endDate}
               getPosition={getPosition}
+              getEndPosition={getEndPosition}
               onCellClick={onCellClick}
               onAllocationClick={onAllocationClick}
             />
@@ -214,11 +237,12 @@ export function TimelineGrid({
             </div>
             {/* Open role rows with project date range blocks */}
             {openRoles.map((role) => {
-              const projStart = role.project?.start_date
-                ? parseISO(role.project.start_date)
+              // Use role-specific dates if set, otherwise fall back to project dates
+              const projStart = (role.start_date || role.project?.start_date)
+                ? parseISO(role.start_date || role.project!.start_date!)
                 : null
-              const projEnd = role.project?.end_date
-                ? parseISO(role.project.end_date)
+              const projEnd = (role.end_date || role.project?.end_date)
+                ? parseISO(role.end_date || role.project!.end_date!)
                 : null
 
               // Only show block if project has dates within the view range
@@ -232,10 +256,8 @@ export function TimelineGrid({
               const showBlock = projStart || projEnd
 
               const left = showBlock ? getPosition(blockStart) : 0
-              const right = showBlock ? getPosition(blockEnd) : 0
-              const width = showBlock
-                ? right - left + colWidth * (zoom === "day" ? 1 : 0.15)
-                : 0
+              const right = showBlock ? getEndPosition(blockEnd) : 0
+              const width = showBlock ? right - left : 0
 
               return (
                 <div
@@ -262,7 +284,7 @@ export function TimelineGrid({
                   {/* Dashed block showing needed period */}
                   {showBlock && width > 0 && (
                     <div
-                      className="absolute top-2 rounded-md flex items-center px-2 text-xs font-medium truncate"
+                      className="absolute top-2 rounded-md flex items-center px-2 text-xs font-medium truncate cursor-pointer hover:opacity-80 transition-opacity"
                       style={{
                         left: Math.max(left, 0),
                         width: Math.max(width, 40),
@@ -271,7 +293,8 @@ export function TimelineGrid({
                         border: `2px dashed ${role.project?.color || "#f59e0b"}`,
                         color: role.project?.color || "#f59e0b",
                       }}
-                      title={`${role.title} — ${role.project?.name} (unallocated)`}
+                      title={`${role.title} — ${role.project?.name} (click to assign)`}
+                      onClick={() => onOpenRoleClick?.(role)}
                     >
                       <span className="truncate">
                         {role.title} — needs staffing
@@ -297,6 +320,7 @@ interface TimelineRowProps {
   allocations: (Allocation & {
     project?: { name: string; color: string; id: string } | null
     profile?: Profile | null
+    project_role?: { title: string } | null
   })[]
   absences: Absence[]
   holidays: PublicHoliday[]
@@ -309,6 +333,7 @@ interface TimelineRowProps {
   startDate: Date
   endDate: Date
   getPosition: (date: Date) => number
+  getEndPosition: (date: Date) => number
   onCellClick: (profileId: string, date: Date) => void
   onAllocationClick: (allocation: Allocation) => void
 }
@@ -326,6 +351,7 @@ function TimelineRow({
   startDate,
   endDate,
   getPosition,
+  getEndPosition,
   onCellClick,
   onAllocationClick,
 }: TimelineRowProps) {
@@ -378,8 +404,8 @@ function TimelineRow({
         if (aStart > aEnd) return null
 
         const left = getPosition(aStart)
-        const right = getPosition(aEnd)
-        const width = right - left + colWidth * (zoom === "day" ? 1 : 0.15)
+        const right = getEndPosition(aEnd)
+        const width = right - left
 
         return (
           <div
@@ -397,26 +423,87 @@ function TimelineRow({
         )
       })}
 
-      {/* Allocation blocks */}
-      {allocations.map((allocation) => {
-        const aStart = dateMax([parseISO(allocation.start_date), startDate])
-        const aEnd = dateMin([parseISO(allocation.end_date), endDate])
-        if (aStart > aEnd) return null
+      {/* Allocation blocks — stacked when overlapping */}
+      {(() => {
+        // Compute visible blocks with positions
+        const blocks = allocations.map((allocation) => {
+          const rawStart = parseISO(allocation.start_date)
+          const rawEnd = parseISO(allocation.end_date)
+          const aStart = dateMax([rawStart, startDate])
+          const aEnd = dateMin([rawEnd, endDate])
+          if (aStart > aEnd) return null
 
-        const left = getPosition(aStart)
-        const right = getPosition(aEnd)
-        const width = right - left + colWidth * (zoom === "day" ? 1 : 0.15)
+          const left = getPosition(aStart)
+          const right = getEndPosition(aEnd)
+          const width = right - left
 
-        return (
-          <AllocationBlock
-            key={allocation.id}
-            allocation={allocation}
-            left={Math.max(left, 0)}
-            width={Math.max(width, 16)}
-            onClick={() => onAllocationClick(allocation)}
-          />
-        )
-      })}
+          return {
+            allocation,
+            left: Math.max(left, 0),
+            width: Math.max(width, 16),
+            overflowLeft: rawStart < startDate,
+            overflowRight: rawEnd > endDate,
+            startMs: aStart.getTime(),
+            endMs: aEnd.getTime(),
+          }
+        }).filter(Boolean) as {
+          allocation: (typeof allocations)[number]
+          left: number
+          width: number
+          overflowLeft: boolean
+          overflowRight: boolean
+          startMs: number
+          endMs: number
+        }[]
+
+        // Assign lane indices using a greedy interval scheduling approach
+        const laneEnds: number[] = [] // endMs of each lane
+        const blockLanes: number[] = []
+        const sorted = blocks
+          .map((b, i) => ({ ...b, origIdx: i }))
+          .sort((a, b) => a.startMs - b.startMs)
+        for (const block of sorted) {
+          let assignedLane = -1
+          for (let l = 0; l < laneEnds.length; l++) {
+            if (block.startMs > laneEnds[l]) {
+              assignedLane = l
+              laneEnds[l] = block.endMs
+              break
+            }
+          }
+          if (assignedLane === -1) {
+            assignedLane = laneEnds.length
+            laneEnds.push(block.endMs)
+          }
+          blockLanes[block.origIdx] = assignedLane
+        }
+
+        const maxLanes = laneEnds.length
+        // If only 1 lane, use default sizing. Otherwise shrink blocks to fit.
+        const blockHeight =
+          maxLanes <= 1
+            ? 30
+            : Math.max(Math.floor((ROW_HEIGHT - 4) / maxLanes), 12)
+        const baseTop = maxLanes <= 1 ? 1 : 2
+
+        return blocks.map((block, i) => {
+          const lane = blockLanes[i]
+          const topPos = baseTop + lane * (blockHeight + 1)
+          return (
+            <AllocationBlock
+              key={block.allocation.id}
+              allocation={block.allocation}
+              left={block.left}
+              width={block.width}
+              top={topPos}
+              height={blockHeight}
+              overflowLeft={block.overflowLeft}
+              overflowRight={block.overflowRight}
+              onClick={() => onAllocationClick(block.allocation)}
+            />
+          )
+        })
+      })()}
     </div>
   )
 }
