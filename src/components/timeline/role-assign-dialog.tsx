@@ -56,6 +56,11 @@ export function RoleAssignDialog({
     new Map()
   )
   const [assigningId, setAssigningId] = React.useState<string | null>(null)
+  const [confirmOverAlloc, setConfirmOverAlloc] = React.useState<{
+    profileId: string
+    profileName: string
+    totalFte: number
+  } | null>(null)
   const [profileSkills, setProfileSkills] = React.useState<
     Map<string, ProfileSkillInfo[]>
   >(new Map())
@@ -169,7 +174,28 @@ export function RoleAssignDialog({
     })
   }
 
-  async function handleAssign(profileId: string) {
+  function handleAssignClick(profileId: string) {
+    if (!role || !roleStartDate || !roleEndDate) return
+
+    const avail = availability.get(profileId)
+    const fte = getFteInput(profileId, avail?.availableFte ?? 1)
+    const usedFte = avail?.usedFte ?? 0
+    const totalFte = usedFte + fte
+
+    if (totalFte > 1.0) {
+      const profile = profiles.find((p) => p.id === profileId)
+      setConfirmOverAlloc({
+        profileId,
+        profileName: profile?.full_name ?? "this person",
+        totalFte: Math.round(totalFte * 100) / 100,
+      })
+      return
+    }
+
+    performAssign(profileId)
+  }
+
+  async function performAssign(profileId: string) {
     if (!role || !roleStartDate || !roleEndDate) return
 
     const avail = availability.get(profileId)
@@ -180,6 +206,7 @@ export function RoleAssignDialog({
       roleFte > 0 ? Math.round((fte / roleFte) * 100) : 100
 
     setAssigningId(profileId)
+    setConfirmOverAlloc(null)
     try {
       await quickAssign(
         profileId,
@@ -377,7 +404,7 @@ export function RoleAssignDialog({
                     </span>
                     <Button
                       size="sm"
-                      onClick={() => handleAssign(profile.id)}
+                      onClick={() => handleAssignClick(profile.id)}
                       disabled={isAssigning || fteValue <= 0}
                     >
                       {isAssigning ? "..." : "Assign"}
@@ -386,6 +413,41 @@ export function RoleAssignDialog({
                 </div>
               )
             })}
+          </div>
+        )}
+        {/* Over-allocation confirmation */}
+        {confirmOverAlloc && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <span className="text-amber-600 text-lg leading-none mt-0.5">&#9888;</span>
+              <div className="text-sm">
+                <p className="font-medium text-amber-800 dark:text-amber-300">
+                  Over-allocation warning
+                </p>
+                <p className="text-amber-700 dark:text-amber-400 mt-1">
+                  This will over-allocate{" "}
+                  <strong>{confirmOverAlloc.profileName}</strong> to{" "}
+                  {confirmOverAlloc.totalFte.toFixed(1)} FTE (exceeds 1.0 FTE).
+                  Continue?
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmOverAlloc(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+                onClick={() => performAssign(confirmOverAlloc.profileId)}
+              >
+                Assign Anyway
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>

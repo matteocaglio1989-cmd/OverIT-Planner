@@ -35,6 +35,7 @@ interface TimelineGridProps {
   allocations: (Allocation & {
     project?: { name: string; color: string; id: string } | null
     profile?: Profile | null
+    project_role?: { title: string } | null
   })[]
   absences: Absence[]
   holidays: PublicHoliday[]
@@ -319,6 +320,7 @@ interface TimelineRowProps {
   allocations: (Allocation & {
     project?: { name: string; color: string; id: string } | null
     profile?: Profile | null
+    project_role?: { title: string } | null
   })[]
   absences: Absence[]
   holidays: PublicHoliday[]
@@ -421,33 +423,87 @@ function TimelineRow({
         )
       })}
 
-      {/* Allocation blocks */}
-      {allocations.map((allocation) => {
-        const rawStart = parseISO(allocation.start_date)
-        const rawEnd = parseISO(allocation.end_date)
-        const aStart = dateMax([rawStart, startDate])
-        const aEnd = dateMin([rawEnd, endDate])
-        if (aStart > aEnd) return null
+      {/* Allocation blocks — stacked when overlapping */}
+      {(() => {
+        // Compute visible blocks with positions
+        const blocks = allocations.map((allocation) => {
+          const rawStart = parseISO(allocation.start_date)
+          const rawEnd = parseISO(allocation.end_date)
+          const aStart = dateMax([rawStart, startDate])
+          const aEnd = dateMin([rawEnd, endDate])
+          if (aStart > aEnd) return null
 
-        const left = getPosition(aStart)
-        const right = getEndPosition(aEnd)
-        const width = right - left
+          const left = getPosition(aStart)
+          const right = getEndPosition(aEnd)
+          const width = right - left
 
-        const overflowLeft = rawStart < startDate
-        const overflowRight = rawEnd > endDate
+          return {
+            allocation,
+            left: Math.max(left, 0),
+            width: Math.max(width, 16),
+            overflowLeft: rawStart < startDate,
+            overflowRight: rawEnd > endDate,
+            startMs: aStart.getTime(),
+            endMs: aEnd.getTime(),
+          }
+        }).filter(Boolean) as {
+          allocation: (typeof allocations)[number]
+          left: number
+          width: number
+          overflowLeft: boolean
+          overflowRight: boolean
+          startMs: number
+          endMs: number
+        }[]
 
-        return (
-          <AllocationBlock
-            key={allocation.id}
-            allocation={allocation}
-            left={Math.max(left, 0)}
-            width={Math.max(width, 16)}
-            overflowLeft={overflowLeft}
-            overflowRight={overflowRight}
-            onClick={() => onAllocationClick(allocation)}
-          />
-        )
-      })}
+        // Assign lane indices using a greedy interval scheduling approach
+        const laneEnds: number[] = [] // endMs of each lane
+        const blockLanes: number[] = []
+        const sorted = blocks
+          .map((b, i) => ({ ...b, origIdx: i }))
+          .sort((a, b) => a.startMs - b.startMs)
+        for (const block of sorted) {
+          let assignedLane = -1
+          for (let l = 0; l < laneEnds.length; l++) {
+            if (block.startMs > laneEnds[l]) {
+              assignedLane = l
+              laneEnds[l] = block.endMs
+              break
+            }
+          }
+          if (assignedLane === -1) {
+            assignedLane = laneEnds.length
+            laneEnds.push(block.endMs)
+          }
+          blockLanes[block.origIdx] = assignedLane
+        }
+
+        const maxLanes = laneEnds.length
+        // If only 1 lane, use default sizing. Otherwise shrink blocks to fit.
+        const blockHeight =
+          maxLanes <= 1
+            ? 30
+            : Math.max(Math.floor((ROW_HEIGHT - 4) / maxLanes), 12)
+        const baseTop = maxLanes <= 1 ? 1 : 2
+
+        return blocks.map((block, i) => {
+          const lane = blockLanes[i]
+          const topPos = baseTop + lane * (blockHeight + 1)
+          return (
+            <AllocationBlock
+              key={block.allocation.id}
+              allocation={block.allocation}
+              left={block.left}
+              width={block.width}
+              top={topPos}
+              height={blockHeight}
+              overflowLeft={block.overflowLeft}
+              overflowRight={block.overflowRight}
+              onClick={() => onAllocationClick(block.allocation)}
+            />
+          )
+        })
+      })()}
     </div>
   )
 }

@@ -39,7 +39,7 @@ export async function getAllocations(startDate: string, endDate: string) {
 
   const { data, error } = await supabase
     .from("allocations")
-    .select("*, project:projects(*), profile:profiles(*)")
+    .select("*, project:projects(*), profile:profiles(*), project_role:project_roles(title)")
     .eq("organization_id", organizationId)
     .lte("start_date", endDate)
     .gte("end_date", startDate)
@@ -50,6 +50,7 @@ export async function getAllocations(startDate: string, endDate: string) {
   return (data ?? []) as (Allocation & {
     project: Allocation["project"]
     profile: Allocation["profile"]
+    project_role?: { title: string } | null
   })[]
 }
 

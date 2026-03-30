@@ -43,6 +43,7 @@ interface TimesheetViewProps {
   initialPlanned: PlannedAllocation[]
   initialPeriod: TimesheetPeriod | null
   initialProjects: AvailableProject[]
+  weeklyCapacityHours?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +57,7 @@ export function TimesheetView({
   initialPlanned,
   initialPeriod,
   initialProjects,
+  weeklyCapacityHours,
 }: TimesheetViewProps) {
   const [weekStart, setWeekStart] = React.useState<Date>(
     () => new Date(initialWeekStart)
@@ -117,6 +119,7 @@ export function TimesheetView({
         planned={planned}
         period={period}
         availableProjects={projects}
+        weeklyCapacityHours={weeklyCapacityHours}
         onRefresh={handleRefresh}
       />
     </div>

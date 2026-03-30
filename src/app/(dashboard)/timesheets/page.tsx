@@ -6,6 +6,7 @@ import {
   getTimesheetPeriod,
   getUserProjects,
 } from "@/lib/actions/timesheets"
+import { getProfile } from "@/lib/actions/people"
 import { TimesheetView } from "@/components/timesheets/timesheet-view"
 
 export default async function TimesheetsPage() {
@@ -14,11 +15,12 @@ export default async function TimesheetsPage() {
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
   const weekStartStr = format(weekStart, "yyyy-MM-dd")
 
-  const [entries, planned, period, projects] = await Promise.all([
+  const [entries, planned, period, projects, profile] = await Promise.all([
     getTimeEntries(profileId, weekStartStr),
     getPlannedHours(profileId, weekStartStr),
     getTimesheetPeriod(profileId, weekStartStr),
     getUserProjects(profileId),
+    getProfile(profileId),
   ])
 
   return (
@@ -36,6 +38,7 @@ export default async function TimesheetsPage() {
         initialPlanned={planned}
         initialPeriod={period}
         initialProjects={projects}
+        weeklyCapacityHours={profile?.weekly_capacity_hours}
       />
     </div>
   )

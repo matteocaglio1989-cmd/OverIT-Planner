@@ -431,6 +431,49 @@ export async function getAvailabilityForDateRange(
   return { usedFte: Math.round(usedFte * 100) / 100, availableFte: Math.round(availableFte * 100) / 100 }
 }
 
+/**
+ * Batch version: fetch availability for multiple profiles in a single query.
+ */
+export async function getBatchAvailabilityForDateRange(
+  profileIds: string[],
+  startDate: string,
+  endDate: string
+): Promise<Record<string, { usedFte: number; availableFte: number }>> {
+  if (profileIds.length === 0) return {}
+
+  const { supabase, organizationId } = await getOrgId()
+
+  const { data: allocations, error } = await supabase
+    .from("allocations")
+    .select("profile_id, hours_per_day")
+    .in("profile_id", profileIds)
+    .eq("organization_id", organizationId)
+    .lte("start_date", endDate)
+    .gte("end_date", startDate)
+
+  if (error) throw error
+
+  // Build per-profile totals
+  const hoursMap = new Map<string, number>()
+  for (const alloc of allocations ?? []) {
+    const current = hoursMap.get(alloc.profile_id) ?? 0
+    hoursMap.set(alloc.profile_id, current + alloc.hours_per_day)
+  }
+
+  const result: Record<string, { usedFte: number; availableFte: number }> = {}
+  for (const id of profileIds) {
+    const totalHoursPerDay = hoursMap.get(id) ?? 0
+    const usedFte = totalHoursPerDay / 8
+    const availableFte = Math.max(0, 1.0 - usedFte)
+    result[id] = {
+      usedFte: Math.round(usedFte * 100) / 100,
+      availableFte: Math.round(availableFte * 100) / 100,
+    }
+  }
+
+  return result
+}
+
 // ---------------------------------------------------------------------------
 // Quick Assign
 // ---------------------------------------------------------------------------

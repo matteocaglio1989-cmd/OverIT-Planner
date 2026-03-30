@@ -54,8 +54,16 @@ export async function POST(request: Request) {
     )
 
     if (!hibobResponse.ok) {
+      let errorMessage: string
+      if (hibobResponse.status === 401) {
+        errorMessage = "Invalid credentials. Please check your API token and service user ID."
+      } else if (hibobResponse.status === 403) {
+        errorMessage = "Service user doesn't have API access. Please verify the service user has the required permissions in HiBob."
+      } else {
+        errorMessage = `HiBob API error: ${hibobResponse.status} ${hibobResponse.statusText}`
+      }
       return NextResponse.json(
-        { error: `HiBob API error: ${hibobResponse.status} ${hibobResponse.statusText}` },
+        { error: errorMessage },
         { status: 502 }
       )
     }
@@ -138,8 +146,23 @@ export async function POST(request: Request) {
       totalInHiBob: employees.length,
     })
   } catch (error) {
+    let errorMessage = "Preview failed"
+    if (error instanceof Error) {
+      // Detect network-level errors (DNS, connection refused, etc.)
+      if (
+        error.message.includes("fetch failed") ||
+        error.message.includes("ECONNREFUSED") ||
+        error.message.includes("ENOTFOUND") ||
+        error.message.includes("network") ||
+        error.message.includes("ETIMEDOUT")
+      ) {
+        errorMessage = "Cannot reach HiBob API. Please check your network connection and try again."
+      } else {
+        errorMessage = error.message
+      }
+    }
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Preview failed" },
+      { error: errorMessage },
       { status: 500 }
     )
   }

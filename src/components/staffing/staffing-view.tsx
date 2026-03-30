@@ -23,6 +23,17 @@ export function StaffingView({ consultants, openRoles }: StaffingViewProps) {
   >(null)
   const [matchRoleId, setMatchRoleId] = React.useState<string | null>(null)
   const [assignRoleId, setAssignRoleId] = React.useState<string | null>(null)
+  const [dateRange, setDateRange] = React.useState<{
+    startDate: string
+    endDate: string
+  } | null>(null)
+
+  const handleDateRangeChange = React.useCallback(
+    (startDate: string, endDate: string) => {
+      setDateRange({ startDate, endDate })
+    },
+    []
+  )
 
   const matchRole = React.useMemo(
     () => openRoles.find((r) => r.id === (matchRoleId ?? assignRoleId)) ?? null,
@@ -50,6 +61,7 @@ export function StaffingView({ consultants, openRoles }: StaffingViewProps) {
               consultants={consultants}
               onSelect={setSelectedConsultant}
               selectedId={selectedConsultant}
+              onDateRangeChange={handleDateRangeChange}
             />
           </CardContent>
         </Card>

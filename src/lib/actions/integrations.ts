@@ -79,11 +79,29 @@ export async function testHiBobConnection(serviceUserId: string, apiToken: strin
     )
 
     if (!response.ok) {
+      if (response.status === 401) {
+        return { error: "Invalid credentials. Please check your API token and service user ID." }
+      }
+      if (response.status === 403) {
+        return { error: "Service user doesn't have API access. Please verify the service user has the required permissions in HiBob." }
+      }
       return { error: `HiBob API returned ${response.status}: ${response.statusText}` }
     }
 
     return { success: true }
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Connection test failed" }
+    if (err instanceof Error) {
+      if (
+        err.message.includes("fetch failed") ||
+        err.message.includes("ECONNREFUSED") ||
+        err.message.includes("ENOTFOUND") ||
+        err.message.includes("network") ||
+        err.message.includes("ETIMEDOUT")
+      ) {
+        return { error: "Cannot reach HiBob API. Please check your network connection and try again." }
+      }
+      return { error: err.message }
+    }
+    return { error: "Connection test failed" }
   }
 }

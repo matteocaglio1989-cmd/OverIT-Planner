@@ -4,9 +4,11 @@ import { cn } from "@/lib/utils"
 import type { Allocation } from "@/lib/types/database"
 
 interface AllocationBlockProps {
-  allocation: Allocation & { project?: { name: string; color: string } | null }
+  allocation: Allocation & { project?: { name: string; color: string } | null; project_role?: { title: string } | null }
   left: number
   width: number
+  top?: number
+  height?: number
   overflowLeft?: boolean
   overflowRight?: boolean
   onClick: () => void
@@ -16,6 +18,8 @@ export function AllocationBlock({
   allocation,
   left,
   width,
+  top = 1,
+  height = 30,
   overflowLeft,
   overflowRight,
   onClick,
@@ -23,18 +27,20 @@ export function AllocationBlock({
   const color = allocation.project?.color || "#6366f1"
   const isTentative = allocation.status === "tentative"
   const projectName = allocation.project?.name || "Unknown"
+  const roleName = (allocation as { project_role?: { title: string } | null }).project_role?.title
 
   return (
     <button
       type="button"
       className={cn(
-        "absolute top-1 rounded-md px-1.5 text-xs font-medium text-white truncate cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
+        "absolute rounded-md px-1.5 text-xs font-medium text-white truncate cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1",
         "flex items-center gap-1"
       )}
       style={{
         left,
+        top,
         width: Math.max(width - 2, 16),
-        height: 30,
+        height,
         backgroundColor: isTentative ? "transparent" : color,
         border: isTentative ? `2px dashed ${color}` : "none",
         color: isTentative ? color : "#fff",
@@ -49,7 +55,7 @@ export function AllocationBlock({
           : "none",
       }}
       onClick={onClick}
-      title={`${projectName} - ${allocation.hours_per_day}h/day (${allocation.status})`}
+      title={`${projectName}${roleName ? ` - ${roleName}` : ""} - ${allocation.hours_per_day}h/day (${allocation.status})`}
     >
       {overflowLeft && (
         <span className="shrink-0 -ml-0.5 mr-0.5 opacity-80" aria-label="continues before">

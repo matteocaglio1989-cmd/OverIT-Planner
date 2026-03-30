@@ -31,6 +31,7 @@ interface TimelineViewProps {
   initialAllocations: (Allocation & {
     project?: { name: string; color: string; id: string } | null
     profile?: Profile | null
+    project_role?: { title: string } | null
   })[]
   initialAbsences: Absence[]
   initialHolidays: PublicHoliday[]
@@ -97,7 +98,7 @@ export function TimelineView({
         const [allocResult, absResult, holResult] = await Promise.all([
           supabase
             .from("allocations")
-            .select("*, project:projects(*), profile:profiles(*)")
+            .select("*, project:projects(*), profile:profiles(*), project_role:project_roles(title)")
             .lte("start_date", endStr)
             .gte("end_date", startStr)
             .order("start_date"),
@@ -215,7 +216,7 @@ export function TimelineView({
       const [allocResult, rolesResult] = await Promise.all([
         supabase
           .from("allocations")
-          .select("*, project:projects(*), profile:profiles(*)")
+          .select("*, project:projects(*), profile:profiles(*), project_role:project_roles(title)")
           .lte("start_date", endStr)
           .gte("end_date", startStr)
           .order("start_date"),
