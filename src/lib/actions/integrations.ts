@@ -135,13 +135,28 @@ export async function previewHiBobPeople() {
           Authorization: `Basic ${Buffer.from(`${serviceUserId}:${apiToken}`).toString("base64")}`,
           Accept: "application/json",
         },
+        redirect: "error",
       }
-    )
+    ).catch(() => null)
+
+    if (!hibobResponse) {
+      return { error: "Cannot reach HiBob API. Please check your network connection." }
+    }
 
     if (!hibobResponse.ok) {
       if (hibobResponse.status === 401) return { error: "Invalid credentials. Please check your API token and service user ID." }
       if (hibobResponse.status === 403) return { error: "Service user doesn't have API access." }
       return { error: `HiBob API error: ${hibobResponse.status} ${hibobResponse.statusText}` }
+    }
+
+    // Verify response is JSON before parsing
+    const contentType = hibobResponse.headers.get("content-type") || ""
+    if (!contentType.includes("application/json")) {
+      const bodyPreview = await hibobResponse.text()
+      if (bodyPreview.includes("<!doctype") || bodyPreview.includes("<html")) {
+        return { error: "HiBob returned an HTML page instead of data. Your credentials may be invalid or the API endpoint has changed." }
+      }
+      return { error: `Unexpected response from HiBob (${contentType}). Expected JSON.` }
     }
 
     const hibobData = await hibobResponse.json()
@@ -364,8 +379,13 @@ export async function testHiBobConnection(serviceUserId: string, apiToken: strin
           Authorization: `Basic ${Buffer.from(`${serviceUserId}:${apiToken}`).toString("base64")}`,
           Accept: "application/json",
         },
+        redirect: "error",
       }
-    )
+    ).catch(() => null)
+
+    if (!response) {
+      return { error: "Cannot reach HiBob API. Please check your network connection." }
+    }
 
     if (!response.ok) {
       if (response.status === 401) {
@@ -375,6 +395,11 @@ export async function testHiBobConnection(serviceUserId: string, apiToken: strin
         return { error: "Service user doesn't have API access. Please verify the service user has the required permissions in HiBob." }
       }
       return { error: `HiBob API returned ${response.status}: ${response.statusText}` }
+    }
+
+    const contentType = response.headers.get("content-type") || ""
+    if (!contentType.includes("application/json")) {
+      return { error: "HiBob returned an unexpected response. Your credentials may be invalid." }
     }
 
     return { success: true }
