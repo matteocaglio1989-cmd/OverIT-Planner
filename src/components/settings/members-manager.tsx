@@ -184,11 +184,12 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Change Role</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {members.map((member) => (
-              <TableRow key={member.id}>
+              <TableRow key={member.id} className={!member.is_active ? "opacity-50" : undefined}>
                 <TableCell className="font-medium">{member.full_name}</TableCell>
                 <TableCell>{member.email}</TableCell>
                 <TableCell>
@@ -197,20 +198,47 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={member.is_active ? "default" : "secondary"}>
-                    {member.is_active ? "Active" : "Inactive"}
-                  </Badge>
+                  {member.is_active ? (
+                    <Badge variant="default">Active</Badge>
+                  ) : (
+                    <Badge variant="secondary">Deactivated</Badge>
+                  )}
                 </TableCell>
                 <TableCell>
                   <Select
                     value={member.role}
                     onChange={(e) => handleRoleChange(member.id, e.target.value as UserRole)}
                     className="w-32"
+                    disabled={!member.is_active}
                   >
                     <SelectOption value="consultant">Consultant</SelectOption>
                     <SelectOption value="manager">Manager</SelectOption>
                     <SelectOption value="admin">Admin</SelectOption>
                   </Select>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleReinvite(member)}
+                      disabled={actionLoading === member.id}
+                    >
+                      <RotateCw className="h-4 w-4 mr-1" />
+                      Reinvite
+                    </Button>
+                    {member.is_active && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setDeleteTarget(member)}
+                        disabled={actionLoading === member.id}
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
+                      </Button>
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

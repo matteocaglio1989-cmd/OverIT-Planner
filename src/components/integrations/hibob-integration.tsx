@@ -433,7 +433,9 @@ export function HiBobIntegration() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {employees.map((emp, i) => (
+                  {filteredEmployees.map((emp) => {
+                    const originalIndex = employees.indexOf(emp)
+                    return (
                     <TableRow
                       key={emp.hibobId || emp.email}
                       className={emp.selected ? "" : "opacity-50"}
@@ -442,7 +444,7 @@ export function HiBobIntegration() {
                         <input
                           type="checkbox"
                           checked={emp.selected}
-                          onChange={() => toggleEmployee(i)}
+                          onChange={() => toggleEmployee(originalIndex)}
                           className="rounded border-input"
                         />
                       </TableCell>
@@ -479,7 +481,8 @@ export function HiBobIntegration() {
                         )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                    )
+                  })}
                 </TableBody>
               </Table>
             </div>
