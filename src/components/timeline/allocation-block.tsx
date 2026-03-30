@@ -27,7 +27,7 @@ export function AllocationBlock({
   const color = allocation.project?.color || "#6366f1"
   const isTentative = allocation.status === "tentative"
   const projectName = allocation.project?.name || "Unknown"
-  const roleName = (allocation as { project_role?: { title: string } | null }).project_role?.title
+  const roleName = allocation.project_role?.title
 
   return (
     <button
