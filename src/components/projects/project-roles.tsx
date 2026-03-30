@@ -344,8 +344,7 @@ function RoleFormContent({
           <label className="text-sm font-medium">FTE</label>
           <Input
             type="number"
-            min="0"
-            max="1"
+            min="0.1"
             step="0.1"
             value={fte}
             onChange={(e) => setFte(e.target.value)}
