@@ -135,32 +135,34 @@ export async function previewHiBobPeople() {
           Authorization: `Basic ${Buffer.from(`${serviceUserId}:${apiToken}`).toString("base64")}`,
           Accept: "application/json",
         },
-        redirect: "error",
       }
-    ).catch(() => null)
-
-    if (!hibobResponse) {
-      return { error: "Cannot reach HiBob API. Please check your network connection." }
-    }
+    )
 
     if (!hibobResponse.ok) {
-      if (hibobResponse.status === 401) return { error: "Invalid credentials. Please check your API token and service user ID." }
-      if (hibobResponse.status === 403) return { error: "Service user doesn't have API access." }
-      return { error: `HiBob API error: ${hibobResponse.status} ${hibobResponse.statusText}` }
+      if (hibobResponse.status === 401) return { error: "Invalid credentials (401). Please re-enter your API token and service user ID." }
+      if (hibobResponse.status === 403) return { error: "Access denied (403). The service user doesn't have API permissions in HiBob." }
+      // Read body for more detail
+      const errBody = await hibobResponse.text().catch(() => "")
+      return { error: `HiBob API error ${hibobResponse.status}: ${hibobResponse.statusText}. ${errBody.slice(0, 200)}` }
     }
 
-    // Verify response is JSON before parsing
-    const contentType = hibobResponse.headers.get("content-type") || ""
-    if (!contentType.includes("application/json")) {
-      const bodyPreview = await hibobResponse.text()
-      if (bodyPreview.includes("<!doctype") || bodyPreview.includes("<html")) {
-        return { error: "HiBob returned an HTML page instead of data. Your credentials may be invalid or the API endpoint has changed." }
-      }
-      return { error: `Unexpected response from HiBob (${contentType}). Expected JSON.` }
+    // Read as text first to safely check content
+    const responseText = await hibobResponse.text()
+
+    // Check if response is HTML (happens when credentials are invalid and HiBob redirects)
+    if (responseText.trimStart().startsWith("<") || responseText.includes("<!doctype") || responseText.includes("<html")) {
+      return { error: "HiBob returned an HTML page. This usually means your API token is expired or invalid. Please generate a new token in HiBob (Settings > Integrations > API) and re-enter it here." }
     }
 
-    const hibobData = await hibobResponse.json()
-    const employees = hibobData.employees || []
+    // Try parsing as JSON
+    let hibobData: Record<string, unknown>
+    try {
+      hibobData = JSON.parse(responseText)
+    } catch {
+      return { error: `HiBob returned invalid data. Response starts with: "${responseText.slice(0, 100)}..."` }
+    }
+
+    const employees = (hibobData.employees as Record<string, unknown>[]) || []
 
     const { data: existingProfiles } = await supabase
       .from("profiles")
@@ -379,27 +381,24 @@ export async function testHiBobConnection(serviceUserId: string, apiToken: strin
           Authorization: `Basic ${Buffer.from(`${serviceUserId}:${apiToken}`).toString("base64")}`,
           Accept: "application/json",
         },
-        redirect: "error",
       }
-    ).catch(() => null)
-
-    if (!response) {
-      return { error: "Cannot reach HiBob API. Please check your network connection." }
-    }
+    )
 
     if (!response.ok) {
-      if (response.status === 401) {
-        return { error: "Invalid credentials. Please check your API token and service user ID." }
-      }
-      if (response.status === 403) {
-        return { error: "Service user doesn't have API access. Please verify the service user has the required permissions in HiBob." }
-      }
-      return { error: `HiBob API returned ${response.status}: ${response.statusText}` }
+      if (response.status === 401) return { error: "Invalid credentials (401). Check your API token." }
+      if (response.status === 403) return { error: "Access denied (403). Service user needs API permissions." }
+      return { error: `HiBob API error: ${response.status} ${response.statusText}` }
     }
 
-    const contentType = response.headers.get("content-type") || ""
-    if (!contentType.includes("application/json")) {
-      return { error: "HiBob returned an unexpected response. Your credentials may be invalid." }
+    const responseText = await response.text()
+    if (responseText.trimStart().startsWith("<")) {
+      return { error: "HiBob returned HTML. Your API token may be expired. Generate a new one in HiBob Settings > Integrations > API." }
+    }
+
+    try {
+      JSON.parse(responseText)
+    } catch {
+      return { error: `Invalid response from HiBob: "${responseText.slice(0, 100)}..."` }
     }
 
     return { success: true }
