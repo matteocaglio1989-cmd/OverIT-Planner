@@ -44,6 +44,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
   const [allSkills, setAllSkills] = React.useState(initialAllSkills)
   const [skillInput, setSkillInput] = React.useState("")
   const [skillLoading, setSkillLoading] = React.useState(false)
+  const [skillError, setSkillError] = React.useState("")
   const [showSuggestions, setShowSuggestions] = React.useState(false)
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = React.useState(-1)
   const inputRef = React.useRef<HTMLInputElement>(null)
@@ -85,13 +86,23 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
     setSkillLoading(true)
     setSkillInput("")
     setShowSuggestions(false)
+    setSkillError("")
+
+    // Optimistic update: add the skill immediately to the UI
+    const tempId = `temp-${Date.now()}`
+    const optimisticSkill = { skill_id: tempId, skill_name: trimmed, proficiency_level: 3 }
+    setProfileSkills((prev) => [...prev, optimisticSkill])
 
     try {
       const result = await addSkillToProfile(profile.id, trimmed)
-      setProfileSkills((prev) => [
-        ...prev,
-        { skill_id: result.skill_id, skill_name: result.skill_name, proficiency_level: 3 },
-      ])
+      // Replace the optimistic entry with the real data from the server
+      setProfileSkills((prev) =>
+        prev.map((s) =>
+          s.skill_id === tempId
+            ? { skill_id: result.skill_id, skill_name: result.skill_name, proficiency_level: 3 }
+            : s
+        )
+      )
       // If this was a new skill, add it to allSkills for future autocomplete
       if (!allSkills.some((s) => s.id === result.skill_id)) {
         setAllSkills((prev) => [
@@ -106,7 +117,9 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
         ])
       }
     } catch {
-      // Silently handle
+      // Roll back the optimistic update and show an error
+      setProfileSkills((prev) => prev.filter((s) => s.skill_id !== tempId))
+      setSkillError(`Failed to add skill "${trimmed}". Please try again.`)
     } finally {
       setSkillLoading(false)
       inputRef.current?.focus()
@@ -140,6 +153,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
     }
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault()
+      e.stopPropagation()
       if (selectedSuggestionIndex >= 0 && filteredSuggestions[selectedSuggestionIndex]) {
         addSkill(filteredSuggestions[selectedSuggestionIndex].name)
       } else if (skillInput.trim()) {
@@ -162,6 +176,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
       return
     }
     setSkillInput(val)
+    setSkillError("")
     setShowSuggestions(val.trim().length > 0)
   }
 
@@ -415,6 +430,9 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
             <p className="text-xs text-muted-foreground">
               Type a skill name and press Enter or comma to add. New skills are created automatically.
             </p>
+            {skillError && (
+              <p className="text-xs text-red-600">{skillError}</p>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
