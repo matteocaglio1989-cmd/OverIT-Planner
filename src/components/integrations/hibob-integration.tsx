@@ -45,6 +45,7 @@ interface PreviewEmployee {
   department: string
   startDate: string
   location: string
+  weeklyCapacityHours: number | null
   isDuplicate: boolean
   hasChanges: boolean
   existingProfileId: string | null
@@ -429,6 +430,7 @@ export function HiBobIntegration() {
                     <TableHead>Email</TableHead>
                     <TableHead>Job Title</TableHead>
                     <TableHead>Department</TableHead>
+                    <TableHead>Weekly Hours</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -463,6 +465,9 @@ export function HiBobIntegration() {
                         </div>
                       </TableCell>
                       <TableCell>{emp.department || "\u2014"}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {emp.weeklyCapacityHours != null ? `${emp.weeklyCapacityHours}h` : "\u2014"}
+                      </TableCell>
                       <TableCell>
                         {emp.isDuplicate ? (
                           emp.hasChanges ? (
