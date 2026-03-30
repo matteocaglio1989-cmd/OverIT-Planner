@@ -7,6 +7,8 @@ interface AllocationBlockProps {
   allocation: Allocation & { project?: { name: string; color: string } | null }
   left: number
   width: number
+  overflowLeft?: boolean
+  overflowRight?: boolean
   onClick: () => void
 }
 
@@ -14,6 +16,8 @@ export function AllocationBlock({
   allocation,
   left,
   width,
+  overflowLeft,
+  overflowRight,
   onClick,
 }: AllocationBlockProps) {
   const color = allocation.project?.color || "#6366f1"
@@ -47,8 +51,18 @@ export function AllocationBlock({
       onClick={onClick}
       title={`${projectName} - ${allocation.hours_per_day}h/day (${allocation.status})`}
     >
+      {overflowLeft && (
+        <span className="shrink-0 -ml-0.5 mr-0.5 opacity-80" aria-label="continues before">
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        </span>
+      )}
       <span className="truncate">{projectName}</span>
       <span className="shrink-0 opacity-80">{allocation.hours_per_day}h</span>
+      {overflowRight && (
+        <span className="shrink-0 -mr-0.5 ml-0.5 opacity-80" aria-label="continues after">
+          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+        </span>
+      )}
     </button>
   )
 }

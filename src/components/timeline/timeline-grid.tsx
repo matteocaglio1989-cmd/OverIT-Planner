@@ -137,7 +137,7 @@ export function TimelineGrid({
     return map
   }, [profiles, profileAllocations, startDate, endDate])
 
-  // Calculate pixel position for a date
+  // Calculate pixel position for a date, snapping to column boundaries
   const getPosition = useCallback(
     (date: Date): number => {
       if (zoom === "day") {
@@ -147,17 +147,36 @@ export function TimelineGrid({
       if (zoom === "week") {
         const weekStart = startOfWeek(startDate, { weekStartsOn: 1 })
         const diffDays = differenceInDays(date, weekStart)
-        return (diffDays / 7) * colWidth
+        // Snap to the week column boundary
+        return Math.floor(diffDays / 7) * colWidth
       }
-      // month
+      // month — snap to month column boundary
       const monthStart = startOfMonth(startDate)
-      const diffDays = differenceInDays(date, monthStart)
-      const totalDaysInView = differenceInDays(endDate, monthStart) || 1
-      const totalMonths =
-        differenceInMonths(endDate, monthStart) + 1 || 1
-      return (diffDays / (totalDaysInView / totalMonths)) * colWidth
+      const diffMonths = differenceInMonths(date, monthStart)
+      return diffMonths * colWidth
     },
-    [zoom, startDate, endDate, colWidth]
+    [zoom, startDate, colWidth]
+  )
+
+  // Calculate the right edge (end) position for a date, snapping to column end
+  const getEndPosition = useCallback(
+    (date: Date): number => {
+      if (zoom === "day") {
+        const diff = differenceInDays(date, startDate)
+        return (diff + 1) * colWidth
+      }
+      if (zoom === "week") {
+        const weekStart = startOfWeek(startDate, { weekStartsOn: 1 })
+        const diffDays = differenceInDays(date, weekStart)
+        // Snap to the end of the week column
+        return (Math.floor(diffDays / 7) + 1) * colWidth
+      }
+      // month — snap to end of month column
+      const monthStart = startOfMonth(startDate)
+      const diffMonths = differenceInMonths(date, monthStart)
+      return (diffMonths + 1) * colWidth
+    },
+    [zoom, startDate, colWidth]
   )
 
   return (
@@ -184,6 +203,7 @@ export function TimelineGrid({
               startDate={startDate}
               endDate={endDate}
               getPosition={getPosition}
+              getEndPosition={getEndPosition}
               onCellClick={onCellClick}
               onAllocationClick={onAllocationClick}
             />
@@ -235,10 +255,8 @@ export function TimelineGrid({
               const showBlock = projStart || projEnd
 
               const left = showBlock ? getPosition(blockStart) : 0
-              const right = showBlock ? getPosition(blockEnd) : 0
-              const width = showBlock
-                ? right - left + colWidth * (zoom === "day" ? 1 : 0.15)
-                : 0
+              const right = showBlock ? getEndPosition(blockEnd) : 0
+              const width = showBlock ? right - left : 0
 
               return (
                 <div
@@ -313,6 +331,7 @@ interface TimelineRowProps {
   startDate: Date
   endDate: Date
   getPosition: (date: Date) => number
+  getEndPosition: (date: Date) => number
   onCellClick: (profileId: string, date: Date) => void
   onAllocationClick: (allocation: Allocation) => void
 }
@@ -330,6 +349,7 @@ function TimelineRow({
   startDate,
   endDate,
   getPosition,
+  getEndPosition,
   onCellClick,
   onAllocationClick,
 }: TimelineRowProps) {
@@ -382,8 +402,8 @@ function TimelineRow({
         if (aStart > aEnd) return null
 
         const left = getPosition(aStart)
-        const right = getPosition(aEnd)
-        const width = right - left + colWidth * (zoom === "day" ? 1 : 0.15)
+        const right = getEndPosition(aEnd)
+        const width = right - left
 
         return (
           <div
@@ -403,13 +423,18 @@ function TimelineRow({
 
       {/* Allocation blocks */}
       {allocations.map((allocation) => {
-        const aStart = dateMax([parseISO(allocation.start_date), startDate])
-        const aEnd = dateMin([parseISO(allocation.end_date), endDate])
+        const rawStart = parseISO(allocation.start_date)
+        const rawEnd = parseISO(allocation.end_date)
+        const aStart = dateMax([rawStart, startDate])
+        const aEnd = dateMin([rawEnd, endDate])
         if (aStart > aEnd) return null
 
         const left = getPosition(aStart)
-        const right = getPosition(aEnd)
-        const width = right - left + colWidth * (zoom === "day" ? 1 : 0.15)
+        const right = getEndPosition(aEnd)
+        const width = right - left
+
+        const overflowLeft = rawStart < startDate
+        const overflowRight = rawEnd > endDate
 
         return (
           <AllocationBlock
@@ -417,6 +442,8 @@ function TimelineRow({
             allocation={allocation}
             left={Math.max(left, 0)}
             width={Math.max(width, 16)}
+            overflowLeft={overflowLeft}
+            overflowRight={overflowRight}
             onClick={() => onAllocationClick(allocation)}
           />
         )
