@@ -73,7 +73,10 @@ export function OpenRoles({
                 )}
                 <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
                   {role.fte != null && (
-                    <span>{role.fte} FTE</span>
+                    <span>
+                      {role.remaining_fte} / {role.fte} FTE remaining
+                      {role.allocated_fte > 0 && ` (${role.allocated_fte} allocated)`}
+                    </span>
                   )}
                   {role.bill_rate != null && (
                     <span>${role.bill_rate}/hr</span>

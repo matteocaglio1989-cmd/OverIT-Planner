@@ -64,6 +64,7 @@ export function RoleAssignDialog({
     role?.start_date || role?.project?.start_date || ""
   const roleEndDate = role?.end_date || role?.project?.end_date || ""
   const roleFte = role?.fte ?? 1.0
+  const roleRemainingFte = role?.remaining_fte ?? roleFte
 
   // Fetch availability for all profiles when dialog opens
   React.useEffect(() => {
@@ -157,7 +158,7 @@ export function RoleAssignDialog({
 
   function getFteInput(profileId: string, availableFte: number): number {
     if (fteInputs.has(profileId)) return fteInputs.get(profileId)!
-    return Math.min(roleFte, availableFte)
+    return Math.min(roleRemainingFte, availableFte)
   }
 
   function setFteInput(profileId: string, value: number) {
@@ -244,7 +245,12 @@ export function RoleAssignDialog({
                 {role.title}
               </span>
               {" \u2014 "}
-              {roleFte} FTE requested
+              {role.remaining_fte != null
+                ? `${role.remaining_fte} / ${roleFte} FTE remaining`
+                : `${roleFte} FTE requested`}
+              {role.allocated_fte != null && role.allocated_fte > 0 && (
+                <span className="ml-1">({role.allocated_fte} FTE already allocated)</span>
+              )}
             </div>
             <div>
               {formatDate(roleStartDate)} - {formatDate(roleEndDate)}
@@ -351,14 +357,14 @@ export function RoleAssignDialog({
                     <Input
                       type="number"
                       min={0}
-                      max={Math.min(roleFte, 1)}
+                      max={Math.min(roleRemainingFte, 1)}
                       step={0.1}
                       value={fteValue}
                       onChange={(e) => {
                         const val = Math.max(
                           0,
                           Math.min(
-                            Math.min(roleFte, 1),
+                            Math.min(roleRemainingFte, 1),
                             Number(e.target.value)
                           )
                         )

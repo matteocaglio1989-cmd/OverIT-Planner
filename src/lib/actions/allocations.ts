@@ -8,6 +8,7 @@ import type {
   Absence,
   PublicHoliday,
 } from "@/lib/types/database"
+import { recalculateRoleFilled } from "@/lib/actions/staffing"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,12 +81,9 @@ export async function createAllocation(data: {
 
   if (error) throw error
 
-  // If linked to a project role, mark it as filled
+  // If linked to a project role, recalculate whether it's filled
   if (data.project_role_id) {
-    await supabase
-      .from("project_roles")
-      .update({ is_filled: true, assigned_profile_id: data.profile_id })
-      .eq("id", data.project_role_id)
+    await recalculateRoleFilled(data.project_role_id, supabase)
   }
 
   revalidatePath("/timeline")
@@ -134,6 +132,15 @@ export async function updateAllocation(
       .eq("id", roleId)
   }
 
+  // Recalculate filled status if hours or role link changed
+  if (roleId && (data.hours_per_day !== undefined || data.project_role_id !== undefined)) {
+    await recalculateRoleFilled(roleId, supabase)
+  }
+  // If the role link changed, also recalculate the old role
+  if (allocation?.project_role_id && data.project_role_id !== undefined && data.project_role_id !== allocation.project_role_id) {
+    await recalculateRoleFilled(allocation.project_role_id, supabase)
+  }
+
   revalidatePath("/timeline")
   revalidatePath("/staffing")
   if (allocation?.project_id) {
@@ -155,12 +162,9 @@ export async function deleteAllocation(id: string) {
 
   if (error) throw error
 
-  // If linked to a project role, mark it as unfilled
+  // If linked to a project role, recalculate whether it's still filled
   if (allocation?.project_role_id) {
-    await supabase
-      .from("project_roles")
-      .update({ is_filled: false, assigned_profile_id: null })
-      .eq("id", allocation.project_role_id)
+    await recalculateRoleFilled(allocation.project_role_id, supabase)
   }
 
   revalidatePath("/timeline")

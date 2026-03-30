@@ -8,6 +8,7 @@ import type {
   ProjectRole,
   ProjectStatus,
 } from "@/lib/types/database"
+import { recalculateRoleFilled } from "@/lib/actions/staffing"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -320,6 +321,9 @@ export async function createProjectRole(
         bill_rate: data.bill_rate ?? null,
         status: "confirmed",
       })
+
+      // Recalculate is_filled from actual allocations
+      await recalculateRoleFilled(role.id, supabase)
     }
   }
 
@@ -363,10 +367,8 @@ export async function updateProjectRole(
     end_date: string | null
   } | null
 
-  // Auto-set is_filled based on assignment
-  if ("assigned_profile_id" in data) {
-    data.is_filled = !!data.assigned_profile_id
-  }
+  // Note: is_filled is now calculated from total allocated FTE vs role FTE.
+  // Do not auto-set it based on assigned_profile_id alone.
 
   // Update the role
   const { error } = await supabase
@@ -436,6 +438,11 @@ export async function updateProjectRole(
       .from("allocations")
       .update({ hours_per_day: newHoursPerDay })
       .eq("project_role_id", id)
+  }
+
+  // Recalculate is_filled from actual allocations
+  if ("assigned_profile_id" in data || "fte" in data) {
+    await recalculateRoleFilled(id, supabase)
   }
 
   revalidatePath(`/projects/${currentRole.project_id}`)

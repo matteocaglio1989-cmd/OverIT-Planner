@@ -78,7 +78,7 @@ export function TimelineSidebar({ profiles, openRoles = [], onOpenRoleClick }: T
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium truncate">
-                    {role.title}{role.fte != null && role.fte !== 1 ? ` (${role.fte} FTE)` : ""}
+                    {role.title} — {role.remaining_fte} FTE remaining
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
                     {role.project?.name || "Unknown project"}
