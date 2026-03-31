@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  )
+}
+
+function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -18,7 +26,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [showForgot, setShowForgot] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+
+  // Handle auth code from password reset / magic link redirects
+  useEffect(() => {
+    const code = searchParams.get("code")
+    if (code && supabase) {
+      supabase.auth.exchangeCodeForSession(code).then((result: { data?: { session?: unknown }; error?: unknown }) => {
+        if (!result.error && result.data?.session) {
+          router.push("/auth/reset-password")
+          router.refresh()
+        }
+      })
+    }
+  }, [searchParams, supabase, router])
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault()
