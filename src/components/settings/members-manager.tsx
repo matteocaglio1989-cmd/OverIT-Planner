@@ -23,7 +23,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { updateMemberRole, inviteMember, deactivateUser, reinviteUser, resetUserPassword } from "@/lib/actions/settings"
+import { updateMemberRole, inviteMember, deactivateUser, reinviteUser, resetUserPassword, setUserPassword } from "@/lib/actions/settings"
 import { PendingInvites } from "@/components/settings/pending-invites"
 import { UserPlus, RotateCw, Trash2, KeyRound } from "lucide-react"
 import type { UserRole, PendingInvite } from "@/lib/types/database"
@@ -55,6 +55,8 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Member | null>(null)
+  const [passwordTarget, setPasswordTarget] = useState<Member | null>(null)
+  const [newPassword, setNewPassword] = useState("")
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   async function handleRoleChange(profileId: string, newRole: UserRole) {
@@ -106,6 +108,21 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
     }
   }
 
+  async function handleSetPassword() {
+    if (!passwordTarget) return
+    setActionLoading(passwordTarget.id)
+    setMessage(null)
+    const result = await setUserPassword(passwordTarget.id, newPassword)
+    setActionLoading(null)
+    if (result.success) {
+      setMessage(result.message ?? "Password set successfully.")
+      setPasswordTarget(null)
+      setNewPassword("")
+    } else if (result.error) {
+      setMessage(`Error: ${result.error}`)
+    }
+  }
+
   async function handleDeactivate() {
     if (!deleteTarget) return
     setActionLoading(deleteTarget.id)
@@ -139,6 +156,37 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
             </Button>
             <Button variant="destructive" size="sm" onClick={handleDeactivate} disabled={actionLoading === deleteTarget?.id}>
               {actionLoading === deleteTarget?.id ? "Deactivating..." : "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!passwordTarget} onOpenChange={(open) => { if (!open) { setPasswordTarget(null); setNewPassword("") } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set Password for {passwordTarget?.full_name}</DialogTitle>
+            <DialogDescription>
+              Set a temporary password for {passwordTarget?.email}. Share it with them securely.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-pw">New Password</Label>
+              <Input
+                id="new-pw"
+                type="text"
+                placeholder="Min 6 characters"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setPasswordTarget(null); setNewPassword("") }}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSetPassword} disabled={!newPassword || newPassword.length < 6 || actionLoading === passwordTarget?.id}>
+              {actionLoading === passwordTarget?.id ? "Setting..." : "Set Password"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -241,15 +289,26 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
                       Reinvite
                     </Button>
                     {member.role !== "admin" && member.is_active && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleResetPassword(member)}
-                        disabled={actionLoading === member.id}
-                      >
-                        <KeyRound className="h-4 w-4 mr-1" />
-                        Reset Password
-                      </Button>
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => { setPasswordTarget(member); setNewPassword("") }}
+                          disabled={actionLoading === member.id}
+                        >
+                          <KeyRound className="h-4 w-4 mr-1" />
+                          Set Password
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleResetPassword(member)}
+                          disabled={actionLoading === member.id}
+                        >
+                          <RotateCw className="h-4 w-4 mr-1" />
+                          Reset Password
+                        </Button>
+                      </>
                     )}
                     {member.is_active && (
                       <Button
