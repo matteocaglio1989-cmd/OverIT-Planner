@@ -319,3 +319,56 @@ export async function inviteMember(email: string, role: "admin" | "manager" | "c
     return { error: err instanceof Error ? err.message : "Failed to send invitation." }
   }
 }
+
+export async function resetUserPassword(userId: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Not authenticated" }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("organization_id, role")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.organization_id || profile.role !== "admin") {
+    return { error: "Only admins can reset passwords" }
+  }
+
+  // Get target user's email
+  const { data: targetProfile } = await supabase
+    .from("profiles")
+    .select("email, role")
+    .eq("id", userId)
+    .eq("organization_id", profile.organization_id)
+    .single()
+
+  if (!targetProfile) return { error: "User not found" }
+  if (targetProfile.role === "admin") return { error: "Cannot reset password for admin users" }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is not set." }
+  }
+
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const adminClient = createAdminClient()
+
+    // Generate a password reset link and send it via email
+    const { error: resetError } = await adminClient.auth.admin.generateLink({
+      type: "recovery",
+      email: targetProfile.email,
+      options: {
+        redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/auth/reset-password`,
+      },
+    })
+
+    if (resetError) {
+      return { error: `Failed to send reset email: ${resetError.message}` }
+    }
+
+    return { success: true, message: `Password reset email sent to ${targetProfile.email}.` }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to reset password." }
+  }
+}

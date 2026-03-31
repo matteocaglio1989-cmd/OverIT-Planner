@@ -23,9 +23,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { updateMemberRole, inviteMember, deactivateUser, reinviteUser } from "@/lib/actions/settings"
+import { updateMemberRole, inviteMember, deactivateUser, reinviteUser, resetUserPassword } from "@/lib/actions/settings"
 import { PendingInvites } from "@/components/settings/pending-invites"
-import { UserPlus, RotateCw, Trash2 } from "lucide-react"
+import { UserPlus, RotateCw, Trash2, KeyRound } from "lucide-react"
 import type { UserRole, PendingInvite } from "@/lib/types/database"
 
 interface Member {
@@ -88,6 +88,19 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
     setActionLoading(null)
     if (result.success) {
       setMessage(result.message ?? `Reinvite sent to ${member.email}`)
+    } else if (result.error) {
+      setMessage(`Error: ${result.error}`)
+    }
+  }
+
+  async function handleResetPassword(member: Member) {
+    if (!confirm(`Send a password reset email to ${member.email}?`)) return
+    setActionLoading(member.id)
+    setMessage(null)
+    const result = await resetUserPassword(member.id)
+    setActionLoading(null)
+    if (result.success) {
+      setMessage(result.message ?? `Password reset email sent to ${member.email}`)
     } else if (result.error) {
       setMessage(`Error: ${result.error}`)
     }
@@ -227,6 +240,17 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
                       <RotateCw className="h-4 w-4 mr-1" />
                       Reinvite
                     </Button>
+                    {member.role !== "admin" && member.is_active && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleResetPassword(member)}
+                        disabled={actionLoading === member.id}
+                      >
+                        <KeyRound className="h-4 w-4 mr-1" />
+                        Reset Password
+                      </Button>
+                    )}
                     {member.is_active && (
                       <Button
                         variant="destructive"
