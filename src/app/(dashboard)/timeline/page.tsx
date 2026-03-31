@@ -15,8 +15,11 @@ import {
 } from "@/lib/actions/allocations"
 import { getOpenRoles } from "@/lib/actions/staffing"
 import { TimelineView } from "@/components/timeline/timeline-view"
+import { getCurrentUser } from "@/lib/auth-guard"
 
 export default async function TimelinePage() {
+  const currentUser = await getCurrentUser()
+  const isConsultant = currentUser?.role === "consultant"
   const today = new Date()
   const rangeStart = startOfMonth(subMonths(today, 1))
   const rangeEnd = endOfMonth(addMonths(today, 1))

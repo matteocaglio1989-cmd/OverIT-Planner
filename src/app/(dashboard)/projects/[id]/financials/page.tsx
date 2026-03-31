@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth-guard"
 import { notFound } from "next/navigation"
 import { getProject } from "@/lib/actions/projects"
 import { ProjectFinancialsView } from "@/components/projects/project-financials-view"
@@ -7,6 +8,7 @@ export default async function ProjectFinancialsPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireRole(["admin", "manager"])
   const { id } = await params
 
   const project = await getProject(id)

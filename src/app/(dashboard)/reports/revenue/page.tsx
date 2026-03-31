@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth-guard"
 import Link from "next/link"
 import { getRevenueData } from "@/lib/actions/reports"
 import { RevenueChart } from "@/components/reports/revenue-chart"
@@ -9,6 +10,7 @@ export default async function RevenueForecastPage({
 }: {
   searchParams: Promise<{ period?: string }>
 }) {
+  await requireRole(["admin", "manager"])
   const params = await searchParams
   const period = params.period === "12m" ? "12m" : "6m"
 

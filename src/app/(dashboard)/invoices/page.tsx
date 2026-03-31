@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth-guard"
 import Link from "next/link"
 import { getInvoices, getClientsForSelect } from "@/lib/actions/invoices"
 import { InvoicesTable } from "@/components/invoices/invoices-table"
@@ -9,6 +10,7 @@ export default async function InvoicesPage({
 }: {
   searchParams: Promise<{ new?: string }>
 }) {
+  await requireRole(["admin", "manager"])
   const params = await searchParams
   const showNew = params.new === "1"
 

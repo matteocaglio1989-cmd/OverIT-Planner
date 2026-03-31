@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth-guard"
 import Link from "next/link"
 import { getUtilizationData } from "@/lib/actions/reports"
 import { UtilizationChart } from "@/components/reports/utilization-chart"
@@ -9,6 +10,7 @@ export default async function UtilizationReportPage({
 }: {
   searchParams: Promise<{ period?: string }>
 }) {
+  await requireRole(["admin", "manager"])
   const params = await searchParams
   const period = params.period === "quarter" ? "quarter" : "month"
 

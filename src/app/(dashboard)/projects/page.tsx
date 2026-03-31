@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth-guard"
 import { getProjects } from "@/lib/actions/projects"
 import { getClients } from "@/lib/actions/clients"
 import { getProfiles } from "@/lib/actions/people"
@@ -5,6 +6,7 @@ import { ProjectsTable } from "@/components/projects/projects-table"
 import { NewProjectDialog } from "@/components/projects/new-project-dialog"
 
 export default async function ProjectsPage() {
+  await requireRole(["admin", "manager"])
   const [projects, clients, profiles] = await Promise.all([
     getProjects(),
     getClients(),

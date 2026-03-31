@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth-guard"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart3, DollarSign, TrendingUp } from "lucide-react"
@@ -23,7 +24,8 @@ const reports = [
   },
 ]
 
-export default function ReportsPage() {
+export default async function ReportsPage() {
+  await requireRole(["admin", "manager"])
   return (
     <div className="space-y-6">
       <div>

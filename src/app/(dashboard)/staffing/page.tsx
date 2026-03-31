@@ -1,7 +1,9 @@
+import { requireRole } from "@/lib/auth-guard"
 import { getAvailableConsultants, getOpenRoles } from "@/lib/actions/staffing"
 import { StaffingView } from "@/components/staffing/staffing-view"
 
 export default async function StaffingPage() {
+  await requireRole(["admin", "manager"])
   const [consultants, openRoles] = await Promise.all([
     getAvailableConsultants(),
     getOpenRoles(),
