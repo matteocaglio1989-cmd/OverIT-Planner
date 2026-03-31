@@ -115,12 +115,17 @@ export function PeopleTable({ profiles }: PeopleTableProps) {
             filtered.map((profile) => (
               <TableRow
                 key={profile.id}
-                className="cursor-pointer"
+                className={`cursor-pointer ${!profile.is_active ? "opacity-50" : ""}`}
                 onClick={() => router.push(`/people/${profile.id}`)}
               >
                 <TableCell>
                   <div>
-                    <div className="font-medium">{profile.full_name}</div>
+                    <div className="font-medium">
+                      {profile.full_name}
+                      {!profile.is_active && (
+                        <Badge variant="secondary" className="ml-2 text-xs">Deactivated</Badge>
+                      )}
+                    </div>
                     <div className="text-sm text-muted-foreground">
                       {profile.email}
                     </div>

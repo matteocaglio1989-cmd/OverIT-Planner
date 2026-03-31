@@ -24,7 +24,6 @@ export async function getProfiles(): Promise<
     .from("profiles")
     .select("*")
     .eq("organization_id", profile.organization_id)
-    .eq("is_active", true)
     .order("full_name")
 
   if (error) throw error

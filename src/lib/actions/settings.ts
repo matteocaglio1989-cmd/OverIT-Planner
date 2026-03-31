@@ -223,13 +223,24 @@ export async function inviteMember(email: string, role: "admin" | "manager" | "c
   // Check if user already exists in the org
   const { data: existing } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, is_active")
     .eq("email", email.toLowerCase())
     .eq("organization_id", profile.organization_id)
     .single()
 
-  if (existing) {
-    return { error: `${email} is already a member of this organization.` }
+  if (existing && existing.is_active) {
+    return { error: `${email} is already an active member of this organization.` }
+  }
+
+  // If user exists but is deactivated, reactivate them
+  if (existing && !existing.is_active) {
+    await supabase
+      .from("profiles")
+      .update({ is_active: true })
+      .eq("id", existing.id)
+    revalidatePath("/settings")
+    revalidatePath("/people")
+    return { success: true, message: `${email} has been reactivated.` }
   }
 
   // Use Supabase Admin API to invite the user
