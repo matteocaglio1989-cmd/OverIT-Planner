@@ -372,3 +372,54 @@ export async function resetUserPassword(userId: string) {
     return { error: err instanceof Error ? err.message : "Failed to reset password." }
   }
 }
+
+export async function setUserPassword(userId: string, newPassword: string) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "Not authenticated" }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("organization_id, role")
+    .eq("id", user.id)
+    .single()
+
+  if (!profile?.organization_id || profile.role !== "admin") {
+    return { error: "Only admins can set passwords" }
+  }
+
+  if (!newPassword || newPassword.length < 6) {
+    return { error: "Password must be at least 6 characters" }
+  }
+
+  const { data: targetProfile } = await supabase
+    .from("profiles")
+    .select("email, role")
+    .eq("id", userId)
+    .eq("organization_id", profile.organization_id)
+    .single()
+
+  if (!targetProfile) return { error: "User not found" }
+  if (targetProfile.role === "admin") return { error: "Cannot set password for admin users" }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is not set." }
+  }
+
+  try {
+    const { createAdminClient } = await import("@/lib/supabase/admin")
+    const adminClient = createAdminClient()
+
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
+      password: newPassword,
+    })
+
+    if (updateError) {
+      return { error: `Failed to set password: ${updateError.message}` }
+    }
+
+    return { success: true, message: `Password set for ${targetProfile.email}.` }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Failed to set password." }
+  }
+}
