@@ -82,7 +82,7 @@ export function Header() {
               </div>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent>
+          <DropdownMenuContent align="end">
             {userInfo && (
               <>
                 <div className="px-3 py-2">
