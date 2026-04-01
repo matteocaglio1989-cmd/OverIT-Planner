@@ -2,7 +2,7 @@ export type ProjectStatus = "tentative" | "confirmed" | "in_progress" | "complet
 export type AllocationStatus = "tentative" | "confirmed"
 export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "cancelled"
 export type TimesheetStatus = "draft" | "submitted" | "approved" | "rejected"
-export type UserRole = "admin" | "manager" | "consultant"
+export type UserRole = "super_admin" | "admin" | "manager" | "consultant"
 
 export interface Organization {
   id: string

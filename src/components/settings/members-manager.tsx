@@ -42,9 +42,17 @@ interface MembersManagerProps {
 }
 
 const ROLE_COLORS: Record<UserRole, "default" | "secondary" | "outline"> = {
+  super_admin: "default",
   admin: "default",
   manager: "secondary",
   consultant: "outline",
+}
+
+const ROLE_LABELS: Record<UserRole, string> = {
+  super_admin: "Super Admin",
+  admin: "admin",
+  manager: "manager",
+  consultant: "consultant",
 }
 
 export function MembersManager({ members: initialMembers, pendingInvites }: MembersManagerProps) {
@@ -60,7 +68,7 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   async function handleRoleChange(profileId: string, newRole: UserRole) {
-    await updateMemberRole(profileId, newRole)
+    await updateMemberRole(profileId, newRole as "admin" | "manager" | "consultant")
     setMembers(members.map((m) =>
       m.id === profileId ? { ...m, role: newRole } : m
     ))
@@ -71,7 +79,7 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
     setLoading(true)
     setMessage(null)
 
-    const result = await inviteMember(inviteEmail, inviteRole)
+    const result = await inviteMember(inviteEmail, inviteRole as "admin" | "manager" | "consultant")
 
     setLoading(false)
     if (result.success) {
@@ -254,8 +262,8 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
                 <TableCell className="font-medium">{member.full_name}</TableCell>
                 <TableCell>{member.email}</TableCell>
                 <TableCell>
-                  <Badge variant={ROLE_COLORS[member.role]}>
-                    {member.role}
+                  <Badge variant={ROLE_COLORS[member.role]} className={member.role === "super_admin" ? "bg-indigo-600 text-white hover:bg-indigo-700" : undefined}>
+                    {ROLE_LABELS[member.role]}
                   </Badge>
                 </TableCell>
                 <TableCell>
@@ -270,7 +278,7 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
                     value={member.role}
                     onChange={(e) => handleRoleChange(member.id, e.target.value as UserRole)}
                     className="w-32"
-                    disabled={!member.is_active}
+                    disabled={!member.is_active || member.role === "super_admin"}
                   >
                     <SelectOption value="consultant">Consultant</SelectOption>
                     <SelectOption value="manager">Manager</SelectOption>
@@ -278,6 +286,7 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
                   </Select>
                 </TableCell>
                 <TableCell>
+                  {member.role !== "super_admin" && (
                   <div className="flex gap-1">
                     <Button
                       variant="outline"
@@ -322,6 +331,7 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
                       </Button>
                     )}
                   </div>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

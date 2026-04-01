@@ -41,7 +41,7 @@ export async function updateOrganization(data: {
     .eq("id", user.id)
     .single()
 
-  if (!profile?.organization_id || profile.role !== "admin") {
+  if (!profile?.organization_id || !["super_admin", "admin"].includes(profile.role as string)) {
     return { error: "Not authorized" }
   }
 
@@ -121,6 +121,15 @@ export async function getOrgMembers() {
 
 export async function updateMemberRole(profileId: string, role: "admin" | "manager" | "consultant") {
   const supabase = await createClient()
+
+  const { data: targetProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", profileId)
+    .single()
+
+  if (targetProfile?.role === "super_admin") return { error: "Cannot perform this action on a Super Admin" }
+
   const { error } = await supabase
     .from("profiles")
     .update({ role })
@@ -143,7 +152,7 @@ export async function deactivateUser(profileId: string) {
     .eq("id", user.id)
     .single()
 
-  if (!profile?.organization_id || profile.role !== "admin") {
+  if (!profile?.organization_id || !["super_admin", "admin"].includes(profile.role as string)) {
     return { error: "Not authorized" }
   }
 
@@ -151,6 +160,14 @@ export async function deactivateUser(profileId: string) {
   if (profileId === user.id) {
     return { error: "You cannot deactivate yourself." }
   }
+
+  const { data: targetProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", profileId)
+    .single()
+
+  if (targetProfile?.role === "super_admin") return { error: "Cannot perform this action on a Super Admin" }
 
   const { error } = await supabase
     .from("profiles")
@@ -175,7 +192,7 @@ export async function reinviteUser(email: string) {
     .eq("id", user.id)
     .single()
 
-  if (!profile?.organization_id || profile.role !== "admin") {
+  if (!profile?.organization_id || !["super_admin", "admin"].includes(profile.role as string)) {
     return { error: "Not authorized" }
   }
 
@@ -331,7 +348,7 @@ export async function resetUserPassword(userId: string) {
     .eq("id", user.id)
     .single()
 
-  if (!profile?.organization_id || profile.role !== "admin") {
+  if (!profile?.organization_id || !["super_admin", "admin"].includes(profile.role as string)) {
     return { error: "Only admins can reset passwords" }
   }
 
@@ -344,6 +361,7 @@ export async function resetUserPassword(userId: string) {
     .single()
 
   if (!targetProfile) return { error: "User not found" }
+  if (targetProfile.role === "super_admin") return { error: "Cannot perform this action on a Super Admin" }
   if (targetProfile.role === "admin" && userId === user.id) return { error: "Cannot reset your own password from here. Use Forgot Password on the login page." }
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -384,7 +402,7 @@ export async function setUserPassword(userId: string, newPassword: string) {
     .eq("id", user.id)
     .single()
 
-  if (!profile?.organization_id || profile.role !== "admin") {
+  if (!profile?.organization_id || !["super_admin", "admin"].includes(profile.role as string)) {
     return { error: "Only admins can set passwords" }
   }
 
@@ -400,6 +418,7 @@ export async function setUserPassword(userId: string, newPassword: string) {
     .single()
 
   if (!targetProfile) return { error: "User not found" }
+  if (targetProfile.role === "super_admin") return { error: "Cannot perform this action on a Super Admin" }
   if (targetProfile.role === "admin" && userId === user.id) return { error: "Cannot set your own password from here. Use Forgot Password on the login page." }
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {

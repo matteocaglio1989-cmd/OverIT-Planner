@@ -10,7 +10,7 @@ export default async function InvoicesPage({
 }: {
   searchParams: Promise<{ new?: string }>
 }) {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const params = await searchParams
   const showNew = params.new === "1"
 

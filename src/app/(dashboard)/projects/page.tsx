@@ -6,7 +6,7 @@ import { ProjectsTable } from "@/components/projects/projects-table"
 import { NewProjectDialog } from "@/components/projects/new-project-dialog"
 
 export default async function ProjectsPage() {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const [projects, clients, profiles] = await Promise.all([
     getProjects(),
     getClients(),

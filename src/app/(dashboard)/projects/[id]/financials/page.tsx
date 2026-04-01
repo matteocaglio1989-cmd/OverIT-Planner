@@ -8,7 +8,7 @@ export default async function ProjectFinancialsPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const { id } = await params
 
   const project = await getProject(id)

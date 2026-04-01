@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/auth-guard"
 import { HiBobIntegration } from "@/components/integrations/hibob-integration"
 
 export default async function HiBobPage() {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   return (
     <div className="space-y-6">
       <div>

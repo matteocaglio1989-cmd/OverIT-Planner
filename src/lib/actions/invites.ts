@@ -45,7 +45,7 @@ export async function cancelInvite(inviteId: string) {
     .eq("id", user.id)
     .single()
 
-  if (!profile?.organization_id || profile.role !== "admin") {
+  if (!profile?.organization_id || !["super_admin", "admin"].includes(profile.role as string)) {
     return { error: "Not authorized" }
   }
 
@@ -74,7 +74,7 @@ export async function resendInvite(inviteId: string) {
     .eq("id", user.id)
     .single()
 
-  if (!profile?.organization_id || profile.role !== "admin") {
+  if (!profile?.organization_id || !["super_admin", "admin"].includes(profile.role as string)) {
     return { error: "Not authorized" }
   }
 

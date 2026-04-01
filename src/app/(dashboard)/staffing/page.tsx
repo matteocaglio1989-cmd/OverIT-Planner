@@ -3,7 +3,7 @@ import { getAvailableConsultants, getOpenRoles } from "@/lib/actions/staffing"
 import { StaffingView } from "@/components/staffing/staffing-view"
 
 export default async function StaffingPage() {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const [consultants, openRoles] = await Promise.all([
     getAvailableConsultants(),
     getOpenRoles(),
