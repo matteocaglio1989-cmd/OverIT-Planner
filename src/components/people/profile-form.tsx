@@ -33,9 +33,10 @@ interface ProfileFormProps {
   profile: Profile
   skills: { skill_id: string; skill_name: string; proficiency_level: number }[]
   allSkills: Skill[]
+  readOnly?: boolean
 }
 
-export function ProfileForm({ profile, skills: initialSkills, allSkills: initialAllSkills }: ProfileFormProps) {
+export function ProfileForm({ profile, skills: initialSkills, allSkills: initialAllSkills, readOnly = false }: ProfileFormProps) {
   const [saving, setSaving] = React.useState(false)
   const [message, setMessage] = React.useState("")
 
@@ -228,6 +229,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                 name="full_name"
                 defaultValue={profile.full_name}
                 required
+                disabled={readOnly}
               />
             </div>
 
@@ -239,6 +241,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                 type="email"
                 defaultValue={profile.email}
                 required
+                disabled={readOnly}
               />
             </div>
 
@@ -248,6 +251,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                 id="job_title"
                 name="job_title"
                 defaultValue={profile.job_title ?? ""}
+                disabled={readOnly}
               />
             </div>
 
@@ -257,6 +261,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                 id="department"
                 name="department"
                 defaultValue={profile.department ?? ""}
+                disabled={readOnly}
               />
             </div>
 
@@ -266,6 +271,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                 id="seniority_level"
                 name="seniority_level"
                 defaultValue={profile.seniority_level ?? ""}
+                disabled={readOnly}
               >
                 <SelectOption value="">Select...</SelectOption>
                 <SelectOption value="junior">Junior</SelectOption>
@@ -278,7 +284,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
 
             <div className="space-y-2">
               <Label htmlFor="role">Role</Label>
-              <Select id="role" name="role" defaultValue={profile.role}>
+              <Select id="role" name="role" defaultValue={profile.role} disabled={readOnly}>
                 <SelectOption value="consultant">Consultant</SelectOption>
                 <SelectOption value="manager">Manager</SelectOption>
                 <SelectOption value="admin">Admin</SelectOption>
@@ -293,6 +299,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                 type="number"
                 step="0.01"
                 defaultValue={profile.cost_rate_hourly ?? ""}
+                disabled={readOnly}
               />
             </div>
 
@@ -304,6 +311,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                 type="number"
                 step="0.01"
                 defaultValue={profile.default_bill_rate ?? ""}
+                disabled={readOnly}
               />
             </div>
 
@@ -313,6 +321,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                 id="location"
                 name="location"
                 defaultValue={profile.location ?? ""}
+                disabled={readOnly}
               />
             </div>
 
@@ -324,6 +333,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                 maxLength={2}
                 placeholder="e.g. US"
                 defaultValue={profile.country_code ?? ""}
+                disabled={readOnly}
               />
             </div>
 
@@ -334,6 +344,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                 name="weekly_capacity_hours"
                 type="number"
                 defaultValue={profile.weekly_capacity_hours}
+                disabled={readOnly}
               />
             </div>
           </div>
@@ -391,7 +402,7 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
                       : "Add another skill..."
                   }
                   className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                  disabled={skillLoading}
+                  disabled={skillLoading || readOnly}
                 />
                 {showSuggestions && filteredSuggestions.length > 0 && (
                   <div
@@ -435,14 +446,16 @@ export function ProfileForm({ profile, skills: initialSkills, allSkills: initial
             )}
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save Changes"}
-            </Button>
-            {message && (
-              <span className="text-sm text-muted-foreground">{message}</span>
-            )}
-          </div>
+          {!readOnly && (
+            <div className="flex items-center gap-3">
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+              {message && (
+                <span className="text-sm text-muted-foreground">{message}</span>
+              )}
+            </div>
+          )}
         </form>
       </CardContent>
     </Card>

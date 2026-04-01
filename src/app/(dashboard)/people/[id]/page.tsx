@@ -3,6 +3,7 @@ import { getProfile } from "@/lib/actions/people"
 import { getSkills } from "@/lib/actions/skills"
 import { ProfileForm } from "@/components/people/profile-form"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { getCurrentUser } from "@/lib/auth-guard"
 
 export default async function ProfilePage({
   params,
@@ -10,7 +11,8 @@ export default async function ProfilePage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const [profile, allSkills] = await Promise.all([getProfile(id), getSkills()])
+  const [profile, allSkills, currentUser] = await Promise.all([getProfile(id), getSkills(), getCurrentUser()])
+  const isConsultant = currentUser?.role === "consultant"
 
   if (!profile) {
     notFound()
@@ -34,6 +36,7 @@ export default async function ProfilePage({
             profile={profile}
             skills={profile.skills}
             allSkills={allSkills}
+            readOnly={isConsultant}
           />
         </div>
 

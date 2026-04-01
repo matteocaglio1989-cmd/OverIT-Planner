@@ -9,6 +9,7 @@ import type {
   PublicHoliday,
 } from "@/lib/types/database"
 import { recalculateRoleFilled } from "@/lib/actions/staffing"
+import { getCurrentUser } from "@/lib/auth-guard"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -65,6 +66,9 @@ export async function createAllocation(data: {
   bill_rate?: number | null
   project_role_id?: string | null
 }) {
+  const currentUser = await getCurrentUser()
+  if (currentUser?.role === "consultant") throw new Error("Not authorized")
+
   const { supabase, organizationId } = await getOrgId()
 
   const { error } = await supabase.from("allocations").insert({
@@ -109,6 +113,9 @@ export async function updateAllocation(
     >
   >
 ) {
+  const currentUser = await getCurrentUser()
+  if (currentUser?.role === "consultant") throw new Error("Not authorized")
+
   const supabase = await createClient()
 
   const { data: allocation } = await supabase
@@ -150,6 +157,9 @@ export async function updateAllocation(
 }
 
 export async function deleteAllocation(id: string) {
+  const currentUser = await getCurrentUser()
+  if (currentUser?.role === "consultant") throw new Error("Not authorized")
+
   const supabase = await createClient()
 
   // Get the allocation before deleting to sync back to role

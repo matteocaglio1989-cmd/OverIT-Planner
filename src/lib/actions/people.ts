@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import type { Profile, ProfileSkill } from "@/lib/types/database"
+import { getCurrentUser } from "@/lib/auth-guard"
 
 export async function getProfiles(): Promise<
   (Profile & { skills: { skill_id: string; skill_name: string; proficiency_level: number }[] })[]
@@ -107,6 +108,9 @@ export async function updateProfile(
     >
   >
 ) {
+  const currentUser = await getCurrentUser()
+  if (currentUser?.role === "consultant") throw new Error("Consultants cannot edit profiles")
+
   const supabase = await createClient()
 
   const { error } = await supabase.from("profiles").update(data).eq("id", id)
