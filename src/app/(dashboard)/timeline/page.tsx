@@ -54,6 +54,7 @@ export default async function TimelinePage() {
         projects={projects}
         skills={skills}
         initialOpenRoles={openRoles}
+        readOnly={isConsultant}
       />
     </div>
   )

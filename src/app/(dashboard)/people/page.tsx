@@ -3,12 +3,16 @@ import { getPendingInvites } from "@/lib/actions/invites"
 import { PeopleTable } from "@/components/people/people-table"
 import { PendingInvites } from "@/components/settings/pending-invites"
 import { Button } from "@/components/ui/button"
+import { getCurrentUser } from "@/lib/auth-guard"
 
 export default async function PeoplePage() {
-  const [profiles, pendingInvites] = await Promise.all([
+  const [profiles, pendingInvites, currentUser] = await Promise.all([
     getProfiles(),
     getPendingInvites(),
+    getCurrentUser(),
   ])
+
+  const isConsultant = currentUser?.role === "consultant"
 
   return (
     <div className="space-y-6">
@@ -19,10 +23,10 @@ export default async function PeoplePage() {
             Manage team members and their profiles.
           </p>
         </div>
-        <Button disabled>Invite</Button>
+        {!isConsultant && <Button disabled>Invite</Button>}
       </div>
 
-      {pendingInvites.length > 0 && (
+      {!isConsultant && pendingInvites.length > 0 && (
         <PendingInvites invites={pendingInvites} />
       )}
 

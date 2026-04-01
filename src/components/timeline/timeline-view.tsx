@@ -38,7 +38,10 @@ interface TimelineViewProps {
   projects: Project[]
   skills: Skill[]
   initialOpenRoles?: OpenRoleWithProject[]
+  readOnly?: boolean
 }
+
+const noop = () => {}
 
 export function TimelineView({
   initialProfiles,
@@ -48,6 +51,7 @@ export function TimelineView({
   projects,
   skills,
   initialOpenRoles = [],
+  readOnly = false,
 }: TimelineViewProps) {
   const { startDate, endDate, filters, zoom } = useTimelineStore()
 
@@ -267,8 +271,17 @@ export function TimelineView({
     refetch()
   }, [startDate, endDate])
 
+  const cellClickHandler = readOnly ? noop : handleCellClick
+  const allocationClickHandler = readOnly ? noop : handleAllocationClick
+  const openRoleClickHandler = readOnly ? noop : handleOpenRoleClick
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)] border rounded-lg overflow-hidden bg-background">
+      {readOnly && (
+        <div className="bg-muted px-4 py-2 text-sm text-muted-foreground border-b">
+          You are viewing the timeline in read-only mode.
+        </div>
+      )}
       {/* Filters */}
       <TimelineFilters
         profiles={profiles}
@@ -287,7 +300,7 @@ export function TimelineView({
           className="overflow-hidden"
           style={{ width: 240, minWidth: 240 }}
         >
-          <TimelineSidebar profiles={filteredProfiles} openRoles={openRoles} onOpenRoleClick={handleOpenRoleClick} />
+          <TimelineSidebar profiles={filteredProfiles} openRoles={openRoles} onOpenRoleClick={openRoleClickHandler} />
         </div>
 
         {/* Grid */}
@@ -302,33 +315,37 @@ export function TimelineView({
             absences={absences}
             holidays={holidays}
             openRoles={openRoles}
-            onCellClick={handleCellClick}
-            onAllocationClick={handleAllocationClick}
-            onOpenRoleClick={handleOpenRoleClick}
+            onCellClick={cellClickHandler}
+            onAllocationClick={allocationClickHandler}
+            onOpenRoleClick={openRoleClickHandler}
           />
         </div>
       </div>
 
       {/* Allocation Dialog */}
-      <AllocationDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        allocation={editingAllocation}
-        profiles={profiles}
-        projects={projects}
-        defaultProfileId={defaultProfileId}
-        defaultDate={defaultDate}
-        onSuccess={handleMutationSuccess}
-      />
+      {!readOnly && (
+        <AllocationDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          allocation={editingAllocation}
+          profiles={profiles}
+          projects={projects}
+          defaultProfileId={defaultProfileId}
+          defaultDate={defaultDate}
+          onSuccess={handleMutationSuccess}
+        />
+      )}
 
       {/* Role Assign Dialog */}
-      <RoleAssignDialog
-        open={roleAssignOpen}
-        onOpenChange={setRoleAssignOpen}
-        role={selectedOpenRole}
-        profiles={profiles}
-        onSuccess={handleMutationSuccess}
-      />
+      {!readOnly && (
+        <RoleAssignDialog
+          open={roleAssignOpen}
+          onOpenChange={setRoleAssignOpen}
+          role={selectedOpenRole}
+          profiles={profiles}
+          onSuccess={handleMutationSuccess}
+        />
+      )}
     </div>
   )
 }

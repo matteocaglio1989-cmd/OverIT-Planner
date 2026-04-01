@@ -10,6 +10,7 @@ import {
   TrendingUp,
 } from "lucide-react"
 import Link from "next/link"
+import type { UserRole } from "@/lib/types/database"
 
 interface DashboardKPIs {
   utilization_rate: number
@@ -28,7 +29,13 @@ const quickLinks = [
   { name: "Invoices", href: "/invoices", description: "Manage billing" },
 ]
 
-export function DashboardView({ kpis }: { kpis: DashboardKPIs }) {
+const HIDDEN_FOR_CONSULTANT = new Set(["Invoices", "Reports"])
+
+export function DashboardView({ kpis, userRole }: { kpis: DashboardKPIs; userRole: UserRole }) {
+  const visibleQuickLinks = userRole === "consultant"
+    ? quickLinks.filter((link) => !HIDDEN_FOR_CONSULTANT.has(link.name))
+    : quickLinks
+
   return (
     <div className="space-y-8">
       <div>
@@ -69,7 +76,7 @@ export function DashboardView({ kpis }: { kpis: DashboardKPIs }) {
       <div>
         <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {quickLinks.map((link) => (
+          {visibleQuickLinks.map((link) => (
             <Link key={link.href} href={link.href}>
               <Card className="hover:bg-accent transition-colors cursor-pointer">
                 <CardHeader className="pb-2">
