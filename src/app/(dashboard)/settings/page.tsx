@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth-guard"
 import { getOrganization, getHolidays, getOrgMembers } from "@/lib/actions/settings"
 import { getPendingInvites } from "@/lib/actions/invites"
 import { OrgSettingsForm } from "@/components/settings/org-settings-form"
@@ -6,6 +7,7 @@ import { MembersManager } from "@/components/settings/members-manager"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default async function SettingsPage() {
+  await requireRole(["admin", "manager"])
   const [organization, holidays, members, pendingInvites] = await Promise.all([
     getOrganization(),
     getHolidays(),

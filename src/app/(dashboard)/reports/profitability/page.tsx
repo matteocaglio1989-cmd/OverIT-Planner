@@ -1,9 +1,11 @@
+import { requireRole } from "@/lib/auth-guard"
 import Link from "next/link"
 import { getProfitabilityData } from "@/lib/actions/reports"
 import { ProfitabilityTable } from "@/components/reports/profitability-table"
 import { Button } from "@/components/ui/button"
 
 export default async function ProfitabilityPage() {
+  await requireRole(["admin", "manager"])
   const data = await getProfitabilityData()
 
   return (

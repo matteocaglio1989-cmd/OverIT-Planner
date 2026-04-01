@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth-guard"
 import { notFound } from "next/navigation"
 import { getProject } from "@/lib/actions/projects"
 import { getClients } from "@/lib/actions/clients"
@@ -10,6 +11,7 @@ export default async function ProjectDetailsPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireRole(["admin", "manager"])
   const { id } = await params
 
   const [project, clients, profiles, roleDefinitions] = await Promise.all([

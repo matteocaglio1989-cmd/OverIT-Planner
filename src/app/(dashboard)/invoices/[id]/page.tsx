@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth-guard"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getInvoice } from "@/lib/actions/invoices"
@@ -23,6 +24,7 @@ export default async function InvoiceDetailsPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireRole(["admin", "manager"])
   const { id } = await params
 
   let invoice

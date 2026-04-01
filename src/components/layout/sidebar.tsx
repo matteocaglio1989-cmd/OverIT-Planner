@@ -19,7 +19,9 @@ import {
   ChevronRight,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { createClient } from "@/lib/supabase/client"
+import type { UserRole } from "@/lib/types/database"
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
@@ -36,9 +38,46 @@ const navigation = [
   { name: "Settings", href: "/settings", icon: Settings },
 ]
 
+const CONSULTANT_ALLOWED_ITEMS = new Set([
+  "Dashboard",
+  "Timeline",
+  "Timesheets",
+  "People",
+])
+
 export function Sidebar() {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const [role, setRole] = useState<UserRole | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchRole() {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+          if (profile) {
+            setRole(profile.role as UserRole)
+          }
+        }
+      } catch {
+        // If fetch fails, show all items as fallback
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchRole()
+  }, [])
+
+  const filteredNavigation = role === "consultant"
+    ? navigation.filter((item) => CONSULTANT_ALLOWED_ITEMS.has(item.name))
+    : navigation
 
   return (
     <aside
@@ -67,7 +106,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 px-2 py-4">
-        {navigation.map((item) => {
+        {(loading ? navigation : filteredNavigation).map((item) => {
           const isActive =
             item.href === "/"
               ? pathname === "/"
@@ -79,6 +118,7 @@ export function Sidebar() {
               href={item.href}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                loading && "opacity-50 pointer-events-none",
                 isActive
                   ? "bg-sidebar-accent text-sidebar-accent-foreground"
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"

@@ -344,7 +344,7 @@ export async function resetUserPassword(userId: string) {
     .single()
 
   if (!targetProfile) return { error: "User not found" }
-  if (targetProfile.role === "admin") return { error: "Cannot reset password for admin users" }
+  if (targetProfile.role === "admin" && userId === user.id) return { error: "Cannot reset your own password from here. Use Forgot Password on the login page." }
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return { error: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is not set." }
@@ -400,7 +400,7 @@ export async function setUserPassword(userId: string, newPassword: string) {
     .single()
 
   if (!targetProfile) return { error: "User not found" }
-  if (targetProfile.role === "admin") return { error: "Cannot set password for admin users" }
+  if (targetProfile.role === "admin" && userId === user.id) return { error: "Cannot set your own password from here. Use Forgot Password on the login page." }
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return { error: "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is not set." }

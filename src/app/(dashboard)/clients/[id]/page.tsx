@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth-guard"
 import { notFound } from "next/navigation"
 import { getClient } from "@/lib/actions/clients"
 import { ClientForm } from "@/components/clients/client-form"
@@ -10,6 +11,7 @@ export default async function ClientDetailsPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  await requireRole(["admin", "manager"])
   const { id } = await params
   const client = await getClient(id)
 
