@@ -5,7 +5,7 @@ import { ProfitabilityTable } from "@/components/reports/profitability-table"
 import { Button } from "@/components/ui/button"
 
 export default async function ProfitabilityPage() {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const data = await getProfitabilityData()
 
   return (

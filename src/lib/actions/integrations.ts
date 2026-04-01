@@ -18,7 +18,7 @@ export async function saveHiBobConfig(serviceUserId: string, apiToken: string) {
     .single()
 
   if (!profile?.organization_id) return { error: "No organization" }
-  if (profile.role !== "admin" && profile.role !== "manager") {
+  if (profile.role !== "super_admin" && profile.role !== "admin" && profile.role !== "manager") {
     return { error: "Only admins can configure integrations" }
   }
 

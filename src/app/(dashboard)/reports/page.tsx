@@ -25,7 +25,7 @@ const reports = [
 ]
 
 export default async function ReportsPage() {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   return (
     <div className="space-y-6">
       <div>

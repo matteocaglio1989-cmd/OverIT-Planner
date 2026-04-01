@@ -10,7 +10,7 @@ export default async function UtilizationReportPage({
 }: {
   searchParams: Promise<{ period?: string }>
 }) {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const params = await searchParams
   const period = params.period === "quarter" ? "quarter" : "month"
 

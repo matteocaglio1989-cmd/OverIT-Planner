@@ -11,7 +11,7 @@ export default async function ProjectDetailsPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const { id } = await params
 
   const [project, clients, profiles, roleDefinitions] = await Promise.all([

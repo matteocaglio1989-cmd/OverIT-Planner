@@ -3,7 +3,7 @@ import { getSkills } from "@/lib/actions/skills"
 import { SkillsManager } from "@/components/people/skills-manager"
 
 export default async function SkillsPage() {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const skills = await getSkills()
 
   return <SkillsManager skills={skills} />

@@ -7,7 +7,7 @@ import { MembersManager } from "@/components/settings/members-manager"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default async function SettingsPage() {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const [organization, holidays, members, pendingInvites] = await Promise.all([
     getOrganization(),
     getHolidays(),

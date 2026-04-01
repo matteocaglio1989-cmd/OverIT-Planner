@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/auth-guard"
 import { IntegrationsGrid } from "@/components/integrations/integrations-grid"
 
 export default async function IntegrationsPage() {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   return (
     <div className="space-y-6">
       <div>

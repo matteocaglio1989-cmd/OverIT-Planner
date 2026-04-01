@@ -4,7 +4,7 @@ import { ClientsTable } from "@/components/clients/clients-table"
 import { ClientForm } from "@/components/clients/client-form"
 
 export default async function ClientsPage() {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const clients = await getClients()
 
   return (

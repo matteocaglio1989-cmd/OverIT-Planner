@@ -10,7 +10,7 @@ export default async function RevenueForecastPage({
 }: {
   searchParams: Promise<{ period?: string }>
 }) {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const params = await searchParams
   const period = params.period === "12m" ? "12m" : "6m"
 

@@ -24,7 +24,7 @@ export default async function InvoiceDetailsPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requireRole(["admin", "manager"])
+  await requireRole(["super_admin", "admin", "manager"])
   const { id } = await params
 
   let invoice
