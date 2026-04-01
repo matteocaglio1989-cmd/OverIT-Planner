@@ -288,7 +288,7 @@ export function MembersManager({ members: initialMembers, pendingInvites }: Memb
                       <RotateCw className="h-4 w-4 mr-1" />
                       Reinvite
                     </Button>
-                    {member.role !== "admin" && member.is_active && (
+                    {member.is_active && (
                       <>
                         <Button
                           variant="outline"
